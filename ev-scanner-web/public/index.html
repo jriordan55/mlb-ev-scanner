@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- If you open this file directly (file://), set your server URL so the API works: -->
+  <meta name="api-origin" content="" />
+  <title>MLB +EV Scanner</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="brand-row">
+    <h1 class="brand">MLB +EV Scanner</h1>
+    <div class="top-btns">
+      <button type="button" class="top-btn dark" id="btnHelp">How this works</button>
+      <button type="button" class="top-btn" id="btnRefresh">Refresh</button>
+    </div>
+  </header>
+
+  <div class="toolbar" id="toolbar">
+    <label class="pill">Best book
+      <select id="bestBook"></select>
+    </label>
+    <label class="pill">Market
+      <select id="market"></select>
+    </label>
+    <label class="pill">O/U
+      <select id="ou">
+        <option>All</option>
+        <option>Overs</option>
+        <option>Unders</option>
+      </select>
+    </label>
+    <label class="pill">Game
+      <select id="game"></select>
+    </label>
+    <label class="pill">Bankroll ($)
+      <input type="number" id="bankroll" value="1000" min="0" step="50" />
+    </label>
+  </div>
+
+  <p class="status" id="status">Loading…</p>
+
+  <div class="table-wrap">
+    <table class="ev-grid" id="grid">
+      <thead>
+        <tr>
+          <th>EV %</th>
+          <th>Kelly</th>
+          <th>Best</th>
+          <th>Player</th>
+          <th>Line</th>
+          <th>Fair</th>
+          <th>CS*</th>
+          <th>Impl</th>
+          <th>Odds</th>
+          <th>Prop</th>
+          <th>O/U</th>
+          <th>Matchup</th>
+          <th>HR</th>
+          <th>2B/3B</th>
+          <th>1B</th>
+          <th>Runs</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <dialog id="helpDlg" class="modal">
+    <form method="dialog">
+      <h2>How this works</h2>
+      <p>This page loads Ballpark Pal’s Positive EV board on the server, builds the same +EV table logic as the R Shiny app (fair prob from BPP “Win %” when present, else implied odds), and renders a plain HTML table—no R, no Python, no heavy widgets.</p>
+      <p><strong>Fast tips:</strong> Park factors are an extra HTTP request; add <code>?skipPf=1</code> to the URL or set <code>MLB_SCANNER_SKIP_PARK_FACTORS=1</code> on the server for a quicker first paint.</p>
+      <button value="ok" class="top-btn">Close</button>
+    </form>
+  </dialog>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

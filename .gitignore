@@ -1,0 +1,10 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+ev-scanner-web/node_modules
+
+# Large / local-only (optional — keeps GitHub pushes small)
+cache/
+*.xlsx
+rsconnect/

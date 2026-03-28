@@ -1,0 +1,18 @@
+# Deploy on https://render.com (free tier) — see comment in server.mjs header.
+# In the Render dashboard set Root Directory to: ev-scanner-web
+# (if this folder lives inside a larger Git repo).
+
+services:
+  - type: web
+    name: mlb-ev-scanner
+    runtime: node
+    plan: free
+    buildCommand: "echo no-build"
+    startCommand: node server.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: MLB_SCANNER_SKIP_PARK_FACTORS
+        value: "1"
+      - key: MLB_SCANNER_BPP_FETCH_DAYS
+        value: "1"

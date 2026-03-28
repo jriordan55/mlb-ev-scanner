@@ -62,7 +62,62 @@ function formatAm(x) {
   return n > 0 ? `+${n}` : String(n);
 }
 
+function toProbAmerican(american) {
+  const a = Number(american);
+  if (!Number.isFinite(a)) return NaN;
+  return a > 0 ? 100 / (a + 100) : Math.abs(a) / (Math.abs(a) + 100);
+}
+
+function calcEvPct(fairProb, priceAmerican) {
+  const fp = fairProb;
+  const pr = priceAmerican;
+  if (!Number.isFinite(fp) || !Number.isFinite(pr)) return NaN;
+  const dec = pr > 0 ? 1 + pr / 100 : 1 + 100 / Math.abs(pr);
+  const ev = (fp * (dec - 1) - (1 - fp)) * 100;
+  if (!Number.isFinite(ev)) return NaN;
+  return Math.abs(ev) < 0.005 ? 0 : ev;
+}
+
+function americanToDecimal(american) {
+  const a = Number(american);
+  if (!Number.isFinite(a)) return NaN;
+  return a > 0 ? 1 + a / 100 : 1 + 100 / Math.abs(a);
+}
+
+function decimalToAmerican(dec) {
+  let d = Number(dec);
+  if (!Number.isFinite(d)) return NaN;
+  d = Math.max(d, 1.000001);
+  return d >= 2 ? Math.round((d - 1) * 100) : Math.round(-(100 / (d - 1)));
+}
+
+function applyProfitBoostAmerican(american, profitBoostPct) {
+  if (!Number.isFinite(profitBoostPct) || profitBoostPct <= 0) return american;
+  const a = Number(american);
+  if (!Number.isFinite(a)) return american;
+  const dec = americanToDecimal(a);
+  if (!Number.isFinite(dec)) return american;
+  const profit = dec - 1;
+  const newDec = 1 + profit * (1 + profitBoostPct / 100);
+  return decimalToAmerican(newDec);
+}
+
+function resolveBoostProfitPct(mode, customPct) {
+  const m = String(mode ?? "none");
+  if (!m || m === "none") return 0;
+  if (m === "no_sweat") return 25;
+  if (m === "custom") {
+    const x = Number.parseFloat(customPct);
+    return Number.isFinite(x) ? Math.max(0, Math.min(300, x)) : 0;
+  }
+  const n = Number.parseFloat(m);
+  return Number.isFinite(n) ? Math.max(0, Math.min(300, n)) : 0;
+}
+
 let lastData = null;
+/** Ignore stale /api/scan responses when devig controls fire another load quickly. */
+let loadSeq = 0;
+let scanAbort = null;
 
 /** API lives on the Node server; opening index.html via file:// breaks relative /api/scan. */
 function apiOrigin() {
@@ -76,6 +131,9 @@ function scanUrl(opts = {}) {
   const p = new URLSearchParams();
   if (window.location.search.includes("skipPf=1")) p.set("skipPf", "1");
   if (opts.nocache) p.set("nocache", "1");
+  p.set("devigMethod", document.getElementById("devigMethod")?.value || "multiplicative");
+  p.set("devigBooks", document.getElementById("devigBooks")?.value || "ALL");
+  p.set("devigSource", document.getElementById("devigSource")?.value || "ALL");
   const qs = p.toString();
   const path = `/api/scan${qs ? `?${qs}` : ""}`;
   const o = apiOrigin();
@@ -84,33 +142,39 @@ function scanUrl(opts = {}) {
 
 function applyFilters(rows) {
   if (!rows?.length) return [];
+  const g = (id) => document.getElementById(id);
   let out = rows;
-  const market = document.getElementById("market").value;
+  const market = g("market")?.value;
   if (market && market !== "All") out = out.filter((r) => r.market === market);
-  const game = document.getElementById("game").value;
+  const game = g("game")?.value;
   if (game && game !== "All Games") out = out.filter((r) => r.game === game);
-  const ou = document.getElementById("ou").value;
+  const ou = g("ou")?.value;
   if (ou === "Overs") out = out.filter((r) => r.side === "over");
   else if (ou === "Unders") out = out.filter((r) => r.side === "under");
-  const bb = document.getElementById("bestBook").value;
+  const bb = g("bestBook")?.value;
   if (bb && bb !== "All") out = out.filter((r) => r.best_book_key === bb);
   return out;
 }
 
 function getBankroll() {
-  const n = Number.parseFloat(document.getElementById("bankroll").value);
+  const n = Number.parseFloat(document.getElementById("bankroll")?.value ?? "");
   return Number.isFinite(n) ? n : 1000;
 }
 
 async function load(opts = {}) {
   const status = document.getElementById("status");
+  const seq = ++loadSeq;
+  scanAbort?.abort();
+  scanAbort = new AbortController();
+  const { signal } = scanAbort;
+
   if (window.location.protocol === "file:") {
     status.textContent = `Loading via API ${apiOrigin() || "(same host)"}… If this fails, open http://127.0.0.1:3847 after npm start (recommended). First load 30–120s.`;
   } else {
     status.textContent = "Loading odds… (Ballpark Pal pages are large; first load can take 30–120s)";
   }
   try {
-    const r = await fetch(scanUrl(opts), { cache: "no-store" });
+    const r = await fetch(scanUrl(opts), { cache: "no-store", signal });
     const raw = await r.text();
     let data;
     try {
@@ -122,6 +186,8 @@ async function load(opts = {}) {
     }
     if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
     if (!data.ok) throw new Error(data.error || "scan failed");
+    if (seq !== loadSeq) return;
+
     lastData = data;
     fillFilters(data);
     redraw();
@@ -133,10 +199,16 @@ async function load(opts = {}) {
       const origin = apiOrigin() || "";
       const base = origin || window.location.origin || "";
       status.textContent += ` — No raw odds. Open ${base}/api/health in a new tab (server up?). In the terminal running npm start you should see [mlb-ev] lines with row counts. Try: longer timeout (set MLB_SCANNER_BPP_TIMEOUT_SEC=120), only today (MLB_SCANNER_BPP_FETCH_DAYS=1), or ?skipPf=1.`;
+    } else if (data.rows.length === 0 && (st.flat_odds_rows ?? 0) > 0) {
+      status.textContent +=
+        " — Raw odds loaded but EV table is empty. Set env MLB_SCANNER_MIN_BOOKS_SAME_LINE=1 on the server and redeploy, or widen book coverage.";
     }
   } catch (e) {
+    if (e?.name === "AbortError") return;
+    if (seq !== loadSeq) return;
     status.textContent = `Error: ${e.message} — Is the server running (npm start)? Try ${apiOrigin() || ""}/api/health`;
-    document.getElementById("tbody").innerHTML = "";
+    const tbErr = document.getElementById("tbody");
+    if (tbErr) tbErr.innerHTML = "";
   }
 }
 
@@ -153,70 +225,82 @@ function redraw() {
 
 function fillFilters(data) {
   const mk = document.getElementById("market");
-  const curM = mk.value;
-  mk.innerHTML = "";
-  const mo = document.createElement("option");
-  mo.value = "All";
-  mo.textContent = "All";
-  mk.appendChild(mo);
-  for (const m of data.markets || []) {
-    const o = document.createElement("option");
-    o.value = m;
-    o.textContent = data.marketLabels?.[m] || m;
-    mk.appendChild(o);
+  if (mk) {
+    const curM = mk.value;
+    mk.innerHTML = "";
+    const mo = document.createElement("option");
+    mo.value = "All";
+    mo.textContent = "All";
+    mk.appendChild(mo);
+    for (const m of data.markets || []) {
+      const o = document.createElement("option");
+      o.value = m;
+      o.textContent = data.marketLabels?.[m] || m;
+      mk.appendChild(o);
+    }
+    if ([...mk.options].some((o) => o.value === curM)) mk.value = curM;
   }
-  if ([...mk.options].some((o) => o.value === curM)) mk.value = curM;
 
   const gm = document.getElementById("game");
-  const curG = gm.value;
-  gm.innerHTML = "";
-  const go = document.createElement("option");
-  go.value = "All Games";
-  go.textContent = "All Games";
-  gm.appendChild(go);
-  for (const g of data.games || []) {
-    const o = document.createElement("option");
-    o.value = g;
-    o.textContent = g;
-    gm.appendChild(o);
+  if (gm) {
+    const curG = gm.value;
+    gm.innerHTML = "";
+    const go = document.createElement("option");
+    go.value = "All Games";
+    go.textContent = "All Games";
+    gm.appendChild(go);
+    for (const g of data.games || []) {
+      const o = document.createElement("option");
+      o.value = g;
+      o.textContent = g;
+      gm.appendChild(o);
+    }
+    if ([...gm.options].some((o) => o.value === curG)) gm.value = curG;
   }
-  if ([...gm.options].some((o) => o.value === curG)) gm.value = curG;
 
   const bb = document.getElementById("bestBook");
-  const curB = bb.value;
-  bb.innerHTML = "";
-  const bo = document.createElement("option");
-  bo.value = "All";
-  bo.textContent = "All rows";
-  bb.appendChild(bo);
-  for (const b of data.books || []) {
-    const o = document.createElement("option");
-    o.value = b.key;
-    o.textContent = b.label;
-    bb.appendChild(o);
+  if (bb) {
+    const curB = bb.value;
+    bb.innerHTML = "";
+    const bo = document.createElement("option");
+    bo.value = "All";
+    bo.textContent = "All rows";
+    bb.appendChild(bo);
+    for (const b of data.books || []) {
+      const o = document.createElement("option");
+      o.value = b.key;
+      o.textContent = b.label;
+      bb.appendChild(o);
+    }
+    if ([...bb.options].some((o) => o.value === curB)) bb.value = curB;
   }
-  if ([...bb.options].some((o) => o.value === curB)) bb.value = curB;
 
   const thead = document.querySelector("#grid thead tr");
-  const staticCols = 16;
-  while (thead.children.length > staticCols) {
-    thead.removeChild(thead.lastChild);
-  }
-  for (const b of data.books || []) {
-    const th = document.createElement("th");
-    th.className = "book-head";
-    const dom = FAVICON[b.key];
-    if (dom) {
-      th.innerHTML = `<span class="bh"><img src="${favUrl(dom)}" alt="" width="18" height="18" /> ${esc(b.label)}</span>`;
-    } else {
-      th.textContent = b.label;
+  if (thead) {
+    const staticCols = 16;
+    while (thead.children.length > staticCols) {
+      thead.removeChild(thead.lastChild);
     }
-    thead.appendChild(th);
+    for (const b of data.books || []) {
+      const th = document.createElement("th");
+      th.className = "book-head";
+      const dom = FAVICON[b.key];
+      if (dom) {
+        th.innerHTML = `<span class="bh"><img src="${favUrl(dom)}" alt="" width="18" height="18" /> ${esc(b.label)}</span>`;
+      } else {
+        th.textContent = b.label;
+      }
+      thead.appendChild(th);
+    }
   }
 }
 
 function render(rows, bankroll, books) {
   const tb = document.getElementById("tbody");
+  const boostPct = resolveBoostProfitPct(
+    document.getElementById("boostMode")?.value,
+    document.getElementById("boostCustomPct")?.value,
+  );
   if (!rows?.length) {
     const st = lastData?.stats;
     const hint =
@@ -232,18 +316,23 @@ function render(rows, bankroll, books) {
   const frag = document.createDocumentFragment();
   for (const r of rows) {
     const tr = document.createElement("tr");
-    const evc = evClass(r.ev_pct);
+    const effBest =
+      boostPct > 0 ? applyProfitBoostAmerican(r.best_price, boostPct) : r.best_price;
+    const evNum = calcEvPct(r.fair_prob, effBest);
+    const evc = evClass(evNum);
     const cs =
       r.cs_star != null && Number.isFinite(Number(r.cs_star))
         ? Number(r.cs_star) > 0
           ? `+${Math.round(Number(r.cs_star))}`
           : String(Math.round(Number(r.cs_star)))
         : "—";
-    const kelly = formatKelly(r.fair_prob, r.best_price, bankroll);
+    const kelly = formatKelly(r.fair_prob, effBest, bankroll);
     const bestAbbr = keyToAbbr[r.best_book_key] || "";
     const dom = FAVICON[r.best_book_key] || "";
 
-    const evNum = Number(r.ev_pct);
+    const tp = toProbAmerican(effBest);
+    const impliedFmt = Number.isFinite(tp) ? `${(tp * 100).toFixed(1)}%` : "—";
+    const bestPriceFmt = formatAm(effBest);
     const evStr = Number.isFinite(evNum) ? `${evNum.toFixed(2)}%` : "—";
     const cells = [
       `<td class="${evc}">${evStr}</td>`,
@@ -253,8 +342,8 @@ function render(rows, bankroll, books) {
       `<td>${esc(r.line)}</td>`,
       `<td>${esc(r.fair_fmt)}</td>`,
       `<td>${esc(cs)}</td>`,
-      `<td>${esc(r.implied_fmt)}</td>`,
-      `<td>${esc(r.best_price_fmt)}</td>`,
+      `<td>${esc(impliedFmt)}</td>`,
+      `<td>${esc(bestPriceFmt)}</td>`,
       `<td>${esc(r.market_label)}</td>`,
       `<td>${esc(r.side)}</td>`,
       `<td>${esc(r.game)}</td>`,
@@ -284,13 +373,27 @@ function debounce(fn, ms) {
   };
 }
 
-document.getElementById("btnRefresh").addEventListener("click", () => load({ nocache: true }));
-document.getElementById("btnHelp").addEventListener("click", () => document.getElementById("helpDlg").showModal());
+document.getElementById("btnRefresh")?.addEventListener("click", () => load({ nocache: true }));
+document.getElementById("btnHelp")?.addEventListener("click", () => document.getElementById("helpDlg")?.showModal());
 
-["market", "game", "ou", "bestBook"].forEach((id) => {
-  document.getElementById(id).addEventListener("change", () => redraw());
+const reloadScan = debounce(() => load(), 350);
+["devigMethod", "devigBooks", "devigSource"].forEach((id) => {
+  document.getElementById(id)?.addEventListener("change", () => reloadScan());
 });
 
-document.getElementById("bankroll").addEventListener("input", debounce(() => redraw(), 200));
+["market", "game", "ou", "bestBook"].forEach((id) => {
+  document.getElementById(id)?.addEventListener("change", () => redraw());
+});
+
+document.getElementById("bankroll")?.addEventListener("input", debounce(() => redraw(), 200));
+
+document.getElementById("boostMode")?.addEventListener("change", () => {
+  const custom = document.getElementById("boostMode")?.value === "custom";
+  const w = document.getElementById("boostCustomWrap");
+  if (w) w.hidden = !custom;
+  redraw();
+});
+
+document.getElementById("boostCustomPct")?.addEventListener("input", debounce(() => redraw(), 200));
 
 load();

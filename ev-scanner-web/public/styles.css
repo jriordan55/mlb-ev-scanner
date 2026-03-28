@@ -80,6 +80,14 @@ body {
   min-width: 100px;
 }
 
+.pill.prop-pill {
+  min-width: 118px;
+}
+
+.pill.small {
+  min-width: 72px;
+}
+
 .pill select,
 .pill input {
   background: #0f1723;

@@ -15,6 +15,16 @@ import { fileURLToPath } from "node:url";
 import { fetchBallparkPalOddsFlat, buildEvTableBpp, fetchParkFactors, attachParkFactors } from "./lib/bpp.mjs";
 import { TARGET_BOOKS, BOOK_DISPLAY, BOOK_ABBR_UPPER, MARKET_LABELS } from "./lib/constants.mjs";
 
+const ALLOW_DEVIG_METHOD = new Set([
+  "multiplicative",
+  "additive",
+  "probit",
+  "shin",
+  "power",
+  "worst_case",
+  "average",
+]);
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, "public");
 // Render / Railway / Fly set PORT; local dev can use MLB_SCANNER_PORT or default 3847.
@@ -66,9 +76,12 @@ function sendFile(res, filePath) {
 /** In-memory short TTL cache for repeat loads (hosting-friendly). Never cache failed/empty fetches. */
 let scanCache = { at: 0, ttlMs: 45_000, payload: null, key: "" };
 
-async function runScan(skipPf, bypassCache) {
+async function runScan(skipPf, bypassCache, scanOpts = {}) {
   const now = Date.now();
-  const cacheKey = String(skipPf);
+  const dmk = scanOpts.devigMethod ?? "multiplicative";
+  const dbk = scanOpts.devigBooks ?? "ALL";
+  const dsk = scanOpts.devigSource ?? "ALL";
+  const cacheKey = `${skipPf}|${dmk}|${dbk}|${dsk}`;
   if (
     !bypassCache &&
     scanCache.payload &&
@@ -82,10 +95,20 @@ async function runScan(skipPf, bypassCache) {
   const { flat, stats } = await fetchBallparkPalOddsFlat();
   stats.flat_odds_rows = flat.length;
   console.error("[mlb-ev] flat odds rows:", flat.length, "http:", stats.http_status, "html bytes:", stats.raw_html_bytes);
-  // Kelly is recomputed on the client from fair_prob + best_price.
-  let ev = buildEvTableBpp(flat, { bankroll: 1000 });
+  // Kelly / boost recomputed on the client from fair_prob + best_price.
+  let ev = buildEvTableBpp(flat, {
+    bankroll: 1000,
+    devigMethod: dmk,
+    devigBooks: dbk,
+    devigSource: dsk,
+  });
   stats.ev_table_rows = ev.length;
   console.error("[mlb-ev] ev table rows:", ev.length);
+  if (ev.length === 0 && flat.length > 0) {
+    console.error(
+      "[mlb-ev] hint: raw odds > 0 but EV table empty — try MLB_SCANNER_MIN_BOOKS_SAME_LINE=1 or check devig / Fair-from filters.",
+    );
+  }
 
   let pf = [];
   if (!skipPf && flat.length) {
@@ -115,6 +138,9 @@ async function runScan(skipPf, bypassCache) {
     rows: ev,
     books: TARGET_BOOKS.map((k) => ({ key: k, label: BOOK_DISPLAY[k] ?? k, abbr: BOOK_ABBR_UPPER[k] ?? k })),
   };
+  payload.stats.devig_method = dmk;
+  payload.stats.devig_books = dbk;
+  payload.stats.devig_source = dsk;
   if (flat.length > 0) {
     scanCache = { at: now, ttlMs: 45_000, key: cacheKey, payload };
   } else {
@@ -147,7 +173,14 @@ const server = http.createServer(async (req, res) => {
       const params = new URLSearchParams(qi >= 0 ? u.slice(qi + 1) : "");
       const skipPf = params.get("skipPf") === "1" || process.env.MLB_SCANNER_SKIP_PARK_FACTORS === "1";
       const nocache = params.get("nocache") === "1";
-      const base = await runScan(skipPf, nocache);
+      let dm = params.get("devigMethod") || "multiplicative";
+      if (!ALLOW_DEVIG_METHOD.has(dm)) dm = "multiplicative";
+      let db = params.get("devigBooks") || "ALL";
+      if (db !== "ALL" && !TARGET_BOOKS.includes(db)) db = "ALL";
+      let ds = params.get("devigSource") || "ALL";
+      if (ds !== "ALL" && !TARGET_BOOKS.includes(ds)) ds = "ALL";
+      const scanOpts = { devigMethod: dm, devigBooks: db, devigSource: ds };
+      const base = await runScan(skipPf, nocache, scanOpts);
       sendJson(res, 200, base);
     } catch (e) {
       console.error("[mlb-ev] scan error:", e);

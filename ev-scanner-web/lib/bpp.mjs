@@ -9,6 +9,7 @@ import {
   ballparkPairKey,
   normalizeBpMatchupString,
 } from "./constants.mjs";
+import { devigTwoWayAggregate } from "./devig.mjs";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -424,13 +425,23 @@ function lineKey(ln) {
 }
 
 /**
- * BPP single-side EV table (matches R build_ev_table_bpp_single_side core).
+ * BPP single-side EV table (matches R build_ev_table_bpp + two-way devig when O/U pair exists).
  * @param {any[]} rows
  */
 export function buildEvTableBpp(rows, opts = {}) {
   const minBooks = envInt("MLB_SCANNER_MIN_BOOKS_SAME_LINE", envInt("MLB_SHINY_MIN_BOOKS_SAME_LINE", 2));
   const bankroll = opts.bankroll ?? 1000;
   const kellyFrac = envNum("MLB_SCANNER_KELLY_FRACTION", envNum("MLB_SHINY_KELLY_FRACTION", 0.25));
+  const devigMethod = String(opts.devigMethod ?? "multiplicative");
+  const devigSource = String(opts.devigSource ?? "ALL");
+  let devigBooksList = TARGET_BOOKS;
+  if (opts.devigBooks && opts.devigBooks !== "ALL") {
+    const parts = String(opts.devigBooks)
+      .split(",")
+      .map((x) => canonicalBookKey(x.trim()))
+      .filter((x) => TARGET_BOOKS.includes(x));
+    if (parts.length > 0) devigBooksList = parts;
+  }
 
   const d = rows.map((r) => ({
     ...r,
@@ -440,9 +451,38 @@ export function buildEvTableBpp(rows, opts = {}) {
     line_key: lineKey(r.line),
   }));
 
-  const withFair = d.map((r) => {
+  let withFair = d.map((r) => {
     const fpRaw = Number.isFinite(r.consensus_win_prob) ? r.consensus_win_prob : r.implied;
     let fairProb = Math.min(0.98, Math.max(0.02, fpRaw));
+    const fairOdds = probToAmerican(fairProb);
+    const evPct = calcEvPct(fairProb, r.price);
+    return { ...r, fair_prob: fairProb, fair_odds: fairOdds, ev_pct: evPct };
+  });
+
+  /** Same event/market/player/line + book → { over, under } for two-way devig */
+  const pairMap = new Map();
+  for (const r of withFair) {
+    if (!devigBooksList.includes(r.bookmaker_key)) continue;
+    const bk = [r.event_id, r.market, r.player, r.line_key, r.bookmaker_key].join("\t");
+    if (!pairMap.has(bk)) pairMap.set(bk, {});
+    const o = pairMap.get(bk);
+    if (r.side === "over") o.over = r;
+    if (r.side === "under") o.under = r;
+  }
+
+  withFair = withFair.map((r) => {
+    if (!devigBooksList.includes(r.bookmaker_key)) return r;
+    const bk = [r.event_id, r.market, r.player, r.line_key, r.bookmaker_key].join("\t");
+    const o = pairMap.get(bk);
+    if (!o?.over || !o?.under) return r;
+    let m = devigMethod;
+    if (r.market === "batter_home_runs") m = "multiplicative";
+    const pO = o.over.implied;
+    const pU = o.under.implied;
+    const [fO, fU] = devigTwoWayAggregate(pO, pU, m);
+    const fp = r.side === "over" ? fO : fU;
+    if (!Number.isFinite(fp)) return r;
+    const fairProb = Math.min(0.98, Math.max(0.02, fp));
     const fairOdds = probToAmerican(fairProb);
     const evPct = calcEvPct(fairProb, r.price);
     return { ...r, fair_prob: fairProb, fair_odds: fairOdds, ev_pct: evPct };
@@ -457,18 +497,32 @@ export function buildEvTableBpp(rows, opts = {}) {
   }
   const bestPrices = [...bestByKey.values()];
 
-  const consensusMap = new Map();
-  for (const r of withFair) {
-    const k = [r.event_id, r.game, r.market, r.market_label, r.player, r.line_key, r.side].join("\t");
-    if (!consensusMap.has(k)) consensusMap.set(k, []);
-    consensusMap.get(k).push({ fair_prob: r.fair_prob, fair_odds: r.fair_odds });
+  function consensusMapFromRows(rows) {
+    const m = new Map();
+    for (const r of rows) {
+      const k = [r.event_id, r.game, r.market, r.market_label, r.player, r.line_key, r.side].join("\t");
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push({ fair_prob: r.fair_prob, fair_odds: r.fair_odds });
+    }
+    const out = new Map();
+    for (const [k, arr] of m) {
+      const medProb = median(arr.map((x) => x.fair_prob));
+      const medOdds = median(arr.map((x) => x.fair_odds));
+      if (!Number.isFinite(medProb) || !Number.isFinite(medOdds)) continue;
+      out.set(k, { fair_prob: medProb, fair_odds: Math.round(medOdds) });
+    }
+    return out;
   }
-  const consensus = new Map();
-  for (const [k, arr] of consensusMap) {
-    const medProb = median(arr.map((x) => x.fair_prob));
-    const medOdds = median(arr.map((x) => x.fair_odds));
-    consensus.set(k, { fair_prob: medProb, fair_odds: Math.round(medOdds) });
+
+  /** Always: all books (fallback when "Fair from" book did not post that side). */
+  const consensusAll = consensusMapFromRows(withFair);
+
+  let wfConsensus = withFair;
+  if (devigSource !== "ALL" && TARGET_BOOKS.includes(devigSource)) {
+    const filt = withFair.filter((r) => r.bookmaker_key === devigSource);
+    if (filt.length > 0) wfConsensus = filt;
   }
+  const consensusFiltered = consensusMapFromRows(wfConsensus);
 
   /** book col -> uppercase key */
   const bookCol = (bk) => BOOK_ABBR_UPPER[canonicalBookKey(bk)] ?? bk.toUpperCase().slice(0, 3);
@@ -493,7 +547,7 @@ export function buildEvTableBpp(rows, opts = {}) {
   const out = [];
   for (const bp of bestPrices) {
     const ck = [bp.event_id, bp.game, bp.market, bp.market_label, bp.player, bp.line_key, bp.side].join("\t");
-    const cons = consensus.get(ck);
+    const cons = consensusFiltered.get(ck) ?? consensusAll.get(ck);
     if (!cons) continue;
     const gk = gridKey(bp);
     if ((bookDepth.get(gk) ?? 0) < minBooks) continue;

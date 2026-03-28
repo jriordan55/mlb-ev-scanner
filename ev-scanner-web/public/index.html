@@ -24,6 +24,39 @@
     <label class="pill">Market
       <select id="market"></select>
     </label>
+    <label class="pill prop-pill">Devig method
+      <select id="devigMethod">
+        <option value="multiplicative">Multiplicative</option>
+        <option value="additive">Additive</option>
+        <option value="probit">Probit</option>
+        <option value="shin">Shin</option>
+        <option value="power">Power</option>
+        <option value="worst_case">Worst case</option>
+        <option value="average">Average</option>
+      </select>
+    </label>
+    <label class="pill prop-pill">Devig by
+      <select id="devigBooks">
+        <option value="ALL">All books</option>
+        <option value="draftkings">DraftKings</option>
+        <option value="fanduel">FanDuel</option>
+        <option value="espnbet">theScore</option>
+        <option value="betmgm">BetMGM</option>
+        <option value="novig">Novig</option>
+        <option value="caesars">Caesars</option>
+      </select>
+    </label>
+    <label class="pill prop-pill">Fair from
+      <select id="devigSource">
+        <option value="ALL">All books</option>
+        <option value="draftkings">DraftKings</option>
+        <option value="fanduel">FanDuel</option>
+        <option value="espnbet">theScore</option>
+        <option value="betmgm">BetMGM</option>
+        <option value="novig">Novig</option>
+        <option value="caesars">Caesars</option>
+      </select>
+    </label>
     <label class="pill">O/U
       <select id="ou">
         <option>All</option>
@@ -36,6 +69,21 @@
     </label>
     <label class="pill">Bankroll ($)
       <input type="number" id="bankroll" value="1000" min="0" step="50" />
+    </label>
+    <label class="pill prop-pill">Boost
+      <select id="boostMode">
+        <option value="none">None</option>
+        <option value="10">10%</option>
+        <option value="20">20%</option>
+        <option value="25">25%</option>
+        <option value="30">30%</option>
+        <option value="50">50%</option>
+        <option value="no_sweat">No Sweat (~25%)</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </label>
+    <label class="pill small" id="boostCustomWrap" hidden>Boost %
+      <input type="number" id="boostCustomPct" value="25" min="0" max="300" step="1" />
     </label>
   </div>
 
@@ -70,7 +118,8 @@
   <dialog id="helpDlg" class="modal">
     <form method="dialog">
       <h2>How this works</h2>
-      <p>This page loads Ballpark Pal’s Positive EV board on the server, builds the same +EV table logic as the R Shiny app (fair prob from BPP “Win %” when present, else implied odds), and renders a plain HTML table—no R, no Python, no heavy widgets.</p>
+      <p>This page loads Ballpark Pal’s Positive EV board on the server, builds +EV rows (BPP “Win %” when present, else implied; two-way devig when both O and U exist from the books you pick), and renders a plain HTML table.</p>
+      <p><strong>Devig by</strong> limits which sportsbooks are used to build over/under fair prices. <strong>Fair from</strong> sets which books feed the consensus fair line. <strong>Boost</strong> adjusts EV, implied, Kelly, and best odds only—fair value stays the market benchmark.</p>
       <p><strong>Fast tips:</strong> Park factors are an extra HTTP request; add <code>?skipPf=1</code> to the URL or set <code>MLB_SCANNER_SKIP_PARK_FACTORS=1</code> on the server for a quicker first paint.</p>
       <button value="ok" class="top-btn">Close</button>
     </form>

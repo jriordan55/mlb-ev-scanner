@@ -61,7 +61,7 @@ function probToAmerican(p) {
   return x < 0.5 ? Math.round((100 * (1 - x)) / x) : Math.round(-(100 * x) / (1 - x));
 }
 
-function calcEvPct(fairProb, priceAmerican) {
+export function calcEvPct(fairProb, priceAmerican) {
   const fp = fairProb;
   const pr = priceAmerican;
   if (!Number.isFinite(fp) || !Number.isFinite(pr)) return NaN;

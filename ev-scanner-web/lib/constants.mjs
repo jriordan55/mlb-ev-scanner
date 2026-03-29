@@ -20,7 +20,17 @@ export const TARGET_BOOKS = [
 ];
 
 /** Dropped from grid; rows from these keys are skipped at parse time. */
-export const SKIPPED_BOOK_KEYS = new Set(["kalshi", "bovada", "sin_book", "prx"]);
+export const SKIPPED_BOOK_KEYS = new Set([
+  "kalshi",
+  "bovada",
+  "sin_book",
+  "prx",
+  "polymarket",
+  "bpp_poly",
+  "bpp_flf",
+  "bpp_onl",
+  "bpp_sh",
+]);
 
 export const BOOK_DISPLAY = {
   draftkings: "DraftKings",

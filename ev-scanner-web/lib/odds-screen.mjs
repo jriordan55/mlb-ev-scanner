@@ -6,10 +6,11 @@ import {
   BALLPARK_PAL_ODDS_SCREEN_URL,
   BPP_BETMARKET_MAP,
   TARGET_BOOKS,
+  SKIPPED_BOOK_KEYS,
   BOOK_ABBR_UPPER,
   BOOK_DISPLAY,
 } from "./constants.mjs";
-import { buildEvTableBpp, fmtAmerican, calcEvPct, toProb } from "./bpp.mjs";
+import { buildEvTableBpp, dedupeRows, fmtAmerican, calcEvPct, toProb } from "./bpp.mjs";
 
 function envInt(name, def) {
   const v = Number.parseInt(process.env[name] ?? "", 10);
@@ -61,6 +62,11 @@ function canonicalBookKey(x) {
   if (["circa", "cir"].includes(k)) return "circa";
   if (["bovada", "bv", "kalshi", "kal", "sin_book", "sin", "prx"].includes(k)) return "bpp_skip";
   if (["hardrock", "hrk", "hardrockbet"].includes(k)) return "bpp_skip";
+  if (
+    ["polymarket", "poly", "flf", "onl", "sh", "bpp_poly", "bpp_flf", "bpp_onl", "bpp_sh"].includes(k) ||
+    SKIPPED_BOOK_KEYS.has(k)
+  )
+    return "bpp_skip";
   return k;
 }
 
@@ -124,8 +130,8 @@ export function dateFromBppEventId(eventId) {
   return `${m[1]}-${m[2]}-${m[3]}`;
 }
 
-function mergeRowKey(market, side, player, line, game) {
-  return [market, side, normPlayer(player), lineKey(line), game].join("\t");
+function mergeRowKey(dateStr, market, side, player, line, game) {
+  return [dateStr, market, side, normPlayer(player), lineKey(line), game].join("\t");
 }
 
 export function allowedGamesByDateFromEvRows(evRows) {
@@ -209,14 +215,16 @@ function parseOddsScreenDataRow(rowInner, slotBooks) {
   const bpAm = parseBpAmericanTd(tds[i]);
   i++;
   const amPrices = [];
-  while (i < tds.length && tds[i].cls.includes("book-cell") && amPrices.length < 6) {
+  while (i < tds.length && tds[i].cls.includes("book-cell")) {
     amPrices.push(parseBookCellTd(tds[i]));
     i++;
   }
   /** @type {Record<string, number>} */
   const prices = {};
-  for (let j = 0; j < Math.min(6, slotBooks.length, amPrices.length); j++) {
+  const n = Math.min(slotBooks.length, amPrices.length);
+  for (let j = 0; j < n; j++) {
     const bk = canonicalBookKey(slotBooks[j]);
+    if (bk === "bpp_skip" || SKIPPED_BOOK_KEYS.has(bk)) continue;
     const pr = amPrices[j];
     if (TARGET_BOOKS.includes(bk) && Number.isFinite(pr)) prices[bk] = pr;
   }
@@ -240,7 +248,7 @@ function parseOddsScreenDataRow(rowInner, slotBooks) {
 }
 
 async function fetchOddsScreenPage(dateStr, betMarketId, betSide, timeoutSec) {
-  const u = `${BALLPARK_PAL_ODDS_SCREEN_URL}?date=${encodeURIComponent(dateStr)}&BetSide=${betSide}&BetMarket=${betMarketId}`;
+  const u = `${BALLPARK_PAL_ODDS_SCREEN_URL}?date=${encodeURIComponent(dateStr)}&BetSide=${betSide}&BetMarket=${betMarketId}&BetLine=&TeamFilter=`;
   const sec = Math.min(120, Math.max(15, timeoutSec));
   const resp = await fetch(u, {
     signal: abortAfterMs(sec * 1000),
@@ -314,14 +322,15 @@ export async function buildOddsScreenPriceMap(fetchKeys, allowedGamesByDate) {
   return { map, fetches, bytes };
 }
 
-export function collectOddsScreenFetchKeys(flat, allowedGamesByDate) {
+export function collectOddsScreenFetchKeys(_flat, allowedGamesByDate) {
   const keys = new Set();
-  for (const r of flat) {
-    const d = dateFromBppEventId(r.event_id);
-    if (!d || !r.game || !r.market || !r.side) continue;
-    if (!allowedGamesByDate.get(d)?.has(r.game)) continue;
-    if (!MARKET_KEY_TO_BET_ID[r.market]) continue;
-    keys.add(`${d}|${r.market}|${r.side}`);
+  const markets = Object.keys(MARKET_KEY_TO_BET_ID);
+  for (const [dateStr, games] of allowedGamesByDate) {
+    if (!games?.size) continue;
+    for (const market of markets) {
+      keys.add(`${dateStr}|${market}|over`);
+      keys.add(`${dateStr}|${market}|under`);
+    }
   }
   return keys;
 }
@@ -331,7 +340,7 @@ export function applyOddsScreenToFlat(flat, priceMap, allowedGamesByDate) {
   const out = flat.map((r) => {
     const d = dateFromBppEventId(r.event_id);
     if (!d || !allowedGamesByDate.get(d)?.has(r.game)) return r;
-    const mk = mergeRowKey(r.market, r.side, r.player, r.line, r.game);
+    const mk = mergeRowKey(d, r.market, r.side, r.player, r.line, r.game);
     const hit = priceMap.get(mk);
     if (!hit) return r;
     const next = { ...r };
@@ -344,6 +353,48 @@ export function applyOddsScreenToFlat(flat, priceMap, allowedGamesByDate) {
     return next;
   });
   return { flat: out, merged_price_cells: merged };
+}
+
+/**
+ * Add flat rows for target books that only appear on Odds Screen (so EV grid depth + devig see them).
+ */
+export function injectOddsScreenMissingBooks(flat, priceMap, allowedGamesByDate) {
+  if (!flat.length || !priceMap?.size) return { flat, injected: 0 };
+  /** @type {Map<string, any>} */
+  const templateByMk = new Map();
+  for (const r of flat) {
+    const d = dateFromBppEventId(r.event_id);
+    if (!d || !r.game || !allowedGamesByDate.get(d)?.has(r.game)) continue;
+    const mk = mergeRowKey(d, r.market, r.side, r.player, r.line, r.game);
+    if (!templateByMk.has(mk)) templateByMk.set(mk, r);
+  }
+  const have = new Set();
+  for (const r of flat) {
+    const d = dateFromBppEventId(r.event_id);
+    if (!d) continue;
+    const mk = mergeRowKey(d, r.market, r.side, r.player, r.line, r.game);
+    have.add(`${mk}\t${r.bookmaker_key}`);
+  }
+  const added = [];
+  for (const [mk, hit] of priceMap) {
+    const tmpl = templateByMk.get(mk);
+    if (!tmpl) continue;
+    for (const bk of TARGET_BOOKS) {
+      if (SKIPPED_BOOK_KEYS.has(bk)) continue;
+      if (!Number.isFinite(hit.prices[bk])) continue;
+      const rowKey = `${mk}\t${bk}`;
+      if (have.has(rowKey)) continue;
+      have.add(rowKey);
+      added.push({
+        ...tmpl,
+        bookmaker_key: bk,
+        bookmaker: BOOK_DISPLAY[bk] ?? bk,
+        price: hit.prices[bk],
+        bp_price: Number.isFinite(hit.bp_price) ? hit.bp_price : tmpl.bp_price,
+      });
+    }
+  }
+  return { flat: added.length ? [...flat, ...added] : flat, injected: added.length };
 }
 
 function bookColAbbr(bk) {
@@ -359,7 +410,9 @@ export function applyOddsScreenToEvRows(evRows, priceMap) {
   return evRows.map((r) => {
     const ln = Number(r.line);
     if (!Number.isFinite(ln)) return r;
-    const mk = mergeRowKey(r.market, r.side, r.player, ln, r.game);
+    const d = dateFromBppEventId(r.event_id);
+    if (!d) return r;
+    const mk = mergeRowKey(d, r.market, r.side, r.player, ln, r.game);
     const hit = priceMap.get(mk);
     if (!hit) return r;
     const books = { ...r.books };
@@ -438,7 +491,9 @@ export async function mergeOddsScreenPrices(flat, buildOpts) {
   }
 
   const { map, fetches, bytes } = await buildOddsScreenPriceMap(fetchKeys, allowed);
-  const { flat: newFlat, merged_price_cells } = applyOddsScreenToFlat(flat, map, allowed);
+  let { flat: newFlat, merged_price_cells } = applyOddsScreenToFlat(flat, map, allowed);
+  const inj = injectOddsScreenMissingBooks(newFlat, map, allowed);
+  newFlat = dedupeRows(inj.flat);
 
   return {
     flat: newFlat,
@@ -449,6 +504,7 @@ export async function mergeOddsScreenPrices(flat, buildOpts) {
       odds_screen_keys: fetchKeys.size,
       odds_screen_map_rows: map.size,
       odds_screen_merged_cells: merged_price_cells,
+      odds_screen_injected_rows: inj.injected,
     },
   };
 }

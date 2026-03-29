@@ -116,6 +116,7 @@ function canonicalBookKey(x) {
   if (["sin_book", "sin"].includes(k)) return "sin_book";
   if (["prx"].includes(k)) return "prx";
   if (["circa", "cir"].includes(k)) return "circa";
+  if (["polymarket", "poly"].includes(k)) return "polymarket";
   return k;
 }
 
@@ -158,6 +159,12 @@ function bppPositiveEvBookAbbrToKey(abbr) {
     PRX: "__skip__",
     B365: "bet365",
     BET365: "bet365",
+    FLF: "__skip__",
+    ONL: "__skip__",
+    SH: "__skip__",
+    POLY: "__skip__",
+    POLYMARKET: "__skip__",
+    PM: "__skip__",
     HRK: "__skip__",
     HARDROCK: "__skip__",
   };
@@ -405,7 +412,7 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
   return out;
 }
 
-function dedupeRows(rows) {
+export function dedupeRows(rows) {
   const seen = new Set();
   return rows.filter((r) => {
     const k = [r.event_id, r.bookmaker_key, r.market, r.player, r.line, r.side].join("|");

@@ -147,42 +147,6 @@ function calcEvPct(fairProb, priceAmerican) {
   return Math.abs(ev) < 0.005 ? 0 : ev;
 }
 
-function americanToDecimal(american) {
-  const a = Number(american);
-  if (!Number.isFinite(a)) return NaN;
-  return a > 0 ? 1 + a / 100 : 1 + 100 / Math.abs(a);
-}
-
-function decimalToAmerican(dec) {
-  let d = Number(dec);
-  if (!Number.isFinite(d)) return NaN;
-  d = Math.max(d, 1.000001);
-  return d >= 2 ? Math.round((d - 1) * 100) : Math.round(-(100 / (d - 1)));
-}
-
-function applyProfitBoostAmerican(american, profitBoostPct) {
-  if (!Number.isFinite(profitBoostPct) || profitBoostPct <= 0) return american;
-  const a = Number(american);
-  if (!Number.isFinite(a)) return american;
-  const dec = americanToDecimal(a);
-  if (!Number.isFinite(dec)) return american;
-  const profit = dec - 1;
-  const newDec = 1 + profit * (1 + profitBoostPct / 100);
-  return decimalToAmerican(newDec);
-}
-
-function resolveBoostProfitPct(mode, customPct) {
-  const m = String(mode ?? "none");
-  if (!m || m === "none") return 0;
-  if (m === "no_sweat") return 25;
-  if (m === "custom") {
-    const x = Number.parseFloat(customPct);
-    return Number.isFinite(x) ? Math.max(0, Math.min(300, x)) : 0;
-  }
-  const n = Number.parseFloat(m);
-  return Number.isFinite(n) ? Math.max(0, Math.min(300, n)) : 0;
-}
-
 let lastData = null;
 /** Ignore stale /api/scan responses when devig controls fire another load quickly. */
 let loadSeq = 0;
@@ -455,10 +419,6 @@ function syncToggleOddsButton() {
 function render(rows, bankroll, books) {
   const tb = document.getElementById("tbody");
   const hideOdds = hideBestOddsEnabled();
-  const boostPct = resolveBoostProfitPct(
-    document.getElementById("boostMode")?.value,
-    document.getElementById("boostCustomPct")?.value,
-  );
   if (!rows?.length) {
     const st = lastData?.stats;
     const hint =

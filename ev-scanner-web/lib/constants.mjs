@@ -2,7 +2,17 @@ export const BALLPARK_PAL_PF_URL = "https://www.ballparkpal.com/Park-Factors.php
 export const BALLPARK_PAL_POSITIVE_EV_URL = "https://www.ballparkpal.com/Positive-EV.php";
 export const BALLPARK_PAL_ODDS_SCREEN_URL = "https://www.ballparkpal.com/Odds-Screen.php";
 
-export const TARGET_BOOKS = ["draftkings", "fanduel", "espnbet", "betmgm", "novig", "caesars"];
+export const TARGET_BOOKS = [
+  "draftkings",
+  "fanduel",
+  "espnbet",
+  "betmgm",
+  "novig",
+  "caesars",
+  "betvictor",
+  "kalshi",
+  "hardrock",
+];
 
 export const BOOK_DISPLAY = {
   draftkings: "DraftKings",
@@ -13,6 +23,9 @@ export const BOOK_DISPLAY = {
   bet365: "Bet365",
   espnbet: "theScore",
   novig: "Novig",
+  betvictor: "BetVictor",
+  kalshi: "Kalshi",
+  hardrock: "Hard Rock",
 };
 
 export const BOOK_ABBR_UPPER = {
@@ -22,6 +35,9 @@ export const BOOK_ABBR_UPPER = {
   caesars: "CZR",
   espnbet: "TS",
   novig: "NV",
+  betvictor: "BVD",
+  kalshi: "KAL",
+  hardrock: "HRK",
 };
 
 export const MARKET_LABELS = {

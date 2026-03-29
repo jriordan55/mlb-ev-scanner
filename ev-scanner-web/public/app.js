@@ -5,6 +5,9 @@ const FAVICON = {
   betmgm: "betmgm.com",
   novig: "novig.com",
   caesars: "caesars.com",
+  betvictor: "betvictor.com",
+  kalshi: "kalshi.com",
+  hardrock: "hardrock.bet",
 };
 
 const BP_FAV_DOMAIN = "ballparkpal.com";

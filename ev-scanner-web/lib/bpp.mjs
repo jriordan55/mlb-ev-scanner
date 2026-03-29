@@ -105,6 +105,9 @@ function canonicalBookKey(x) {
   if (["novig", "novig_us", "novig_exchange", "nvg", "nv", "nvig", "no_vig", "no-vig", "no vig"].includes(k))
     return "novig";
   if (k === "bet365") return "bet365";
+  if (["betvictor", "bvd", "bv"].includes(k)) return "betvictor";
+  if (["kalshi", "kal"].includes(k)) return "kalshi";
+  if (["hardrock", "hrk", "hardrockbet"].includes(k)) return "hardrock";
   return k;
 }
 
@@ -132,8 +135,31 @@ function bppPositiveEvBookAbbrToKey(abbr) {
     NVIG: "novig",
     NOV: "novig",
     NOVIG: "novig",
+    BVD: "betvictor",
+    BETVICTOR: "betvictor",
+    KAL: "kalshi",
+    KALSHI: "kalshi",
+    HRK: "hardrock",
+    HARDROCK: "hardrock",
   };
-  return m[norm] ?? null;
+  if (m[norm]) return m[norm];
+  if (/^[A-Z]{2,6}$/.test(norm)) return `bpp_${norm.toLowerCase()}`;
+  return null;
+}
+
+/** Grid column header: stable abbr per bookmaker_key (avoids collisions for bpp_* keys). */
+function bookColAbbr(bk) {
+  const ck = canonicalBookKey(bk);
+  if (BOOK_ABBR_UPPER[ck]) return BOOK_ABBR_UPPER[ck];
+  if (ck.startsWith("bpp_")) return ck.slice(4).toUpperCase();
+  return String(ck).toUpperCase().slice(0, 6);
+}
+
+function bookLabelForKey(bk) {
+  const ck = canonicalBookKey(bk);
+  if (BOOK_DISPLAY[ck]) return BOOK_DISPLAY[ck];
+  if (ck.startsWith("bpp_")) return ck.slice(4).toUpperCase();
+  return ck;
 }
 
 function bppMarketTextToKey(t) {
@@ -210,6 +236,9 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
   const d = dateStr.replace(/-/g, "");
   const theadM = html.match(/<thead[^>]*>([\s\S]*?)<\/thead>/);
   let csColIdx = -1;
+  let winColIdx = -1;
+  let bpOddsColIdx = -1;
+  let oppColIdx = -1;
   if (theadM) {
     const thHits = matchAll(/<th[^>]*>([\s\S]*?)<\/th>/g, theadM[1]);
     const thTxt = thHits.map((h) =>
@@ -221,6 +250,9 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
     const hits = [];
     for (let i = 0; i < thTxt.length; i++) {
       if (thTxt[i] === "CSSTAR" || thTxt[i] === "CS") hits.push(i);
+      if (thTxt[i] === "WIN") winColIdx = i;
+      if (thTxt[i] === "OPP") oppColIdx = i;
+      if (thTxt[i] === "BP" && bpOddsColIdx < 0) bpOddsColIdx = i;
     }
     if (hits.length) csColIdx = hits[hits.length - 1];
   }
@@ -228,15 +260,15 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
   if (!tbodyM) return [];
   const tbody = tbodyM[1];
   const rowHits = matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g, tbody);
-  const targetPat = />(DK|FD|CZR|MGM|TSC|TS|NVG|NV|NOVIG|THESCORE)</i;
   /** @type {any[]} */
   const out = [];
 
   for (const rh of rowHits) {
     const r = rh[1];
-    if (!r || !targetPat.test(r)) continue;
+    if (!r) continue;
+    if (!r.includes("Matchup-Machine.php") && !r.includes("data-bet-side=")) continue;
     const cells = bppTdMatchAll(r);
-    if (cells.length < 20) continue;
+    if (cells.length < 18) continue;
 
     let mid = null;
     const midM = r.match(/data-market-id="([0-9]+)"/);
@@ -252,7 +284,7 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
 
     const bkAbbr = htmlText(cells[2]).trim();
     const bkKey = bppPositiveEvBookAbbrToKey(bkAbbr);
-    if (!bkKey || !TARGET_BOOKS.includes(bkKey)) continue;
+    if (!bkKey) continue;
 
     const dbs = r.match(/data-bet-side="(-?1)"/)?.[1];
     const ou = htmlText(cells[4]).toUpperCase().trim();
@@ -273,20 +305,25 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
     const pr = parseAmericanNum(htmlText(cells[6]));
     if (!Number.isFinite(pr)) continue;
 
-    /** Ballpark Pal model line (American odds); thead "BP" column pair — first is odds, second is implied %. */
+    /** Ballpark Pal model line (American odds); thead first "BP" column is model American odds. */
     let bpPrice = NaN;
-    if (cells.length > 14) {
+    if (bpOddsColIdx >= 0 && bpOddsColIdx < cells.length) {
+      bpPrice = parseAmericanNum(htmlText(cells[bpOddsColIdx]));
+    } else if (cells.length > 14) {
       bpPrice = parseAmericanNum(htmlText(cells[14]));
     }
 
-    const opp = htmlText(cells[17]).toUpperCase().replace(/\s+/g, " ").trim();
+    const oppCell =
+      oppColIdx >= 0 && oppColIdx < cells.length ? cells[oppColIdx] : cells.length > 17 ? cells[17] : "";
+    const opp = htmlText(oppCell).toUpperCase().replace(/\s+/g, " ").trim();
     if (!opp) continue;
 
     const pair = [tm, opp].sort();
     const awayTm = pair[0];
     const homeTm = pair[1];
 
-    const winIdx = Math.min(cells.length, 24) - 1;
+    const winIdx =
+      winColIdx >= 0 && winColIdx < cells.length ? winColIdx : Math.max(0, cells.length - 2);
     let win = parseBppWinPctFromTd(cells[winIdx]);
     if (!Number.isFinite(win) || win <= 0 || win >= 1) win = NaN;
 
@@ -446,14 +483,6 @@ export function buildEvTableBpp(rows, opts = {}) {
   const kellyFrac = envNum("MLB_SCANNER_KELLY_FRACTION", envNum("MLB_SHINY_KELLY_FRACTION", 0.25));
   const devigMethod = String(opts.devigMethod ?? "multiplicative");
   const devigSource = String(opts.devigSource ?? "ALL");
-  let devigBooksList = TARGET_BOOKS;
-  if (opts.devigBooks && opts.devigBooks !== "ALL") {
-    const parts = String(opts.devigBooks)
-      .split(",")
-      .map((x) => canonicalBookKey(x.trim()))
-      .filter((x) => TARGET_BOOKS.includes(x));
-    if (parts.length > 0) devigBooksList = parts;
-  }
 
   const d = rows.map((r) => ({
     ...r,
@@ -463,6 +492,31 @@ export function buildEvTableBpp(rows, opts = {}) {
     line_key: lineKey(r.line),
     bp_price: Number.isFinite(Number(r.bp_price)) ? Number(r.bp_price) : null,
   }));
+
+  const keysInData = [...new Set(d.map((r) => r.bookmaker_key).filter(Boolean))].sort();
+  const orderedBookKeys = [
+    ...TARGET_BOOKS.filter((k) => keysInData.includes(k)),
+    ...keysInData.filter((k) => !TARGET_BOOKS.includes(k)),
+  ];
+  const booksForUi = orderedBookKeys.map((k) => ({
+    key: canonicalBookKey(k),
+    label: bookLabelForKey(k),
+    abbr: bookColAbbr(k),
+  }));
+
+  let devigBooksList;
+  const dbRaw = String(opts.devigBooks ?? "ALL").trim();
+  if (dbRaw.toUpperCase() !== "ALL") {
+    const parts = dbRaw
+      .split(",")
+      .map((x) => canonicalBookKey(x.trim()))
+      .filter(Boolean)
+      .filter((x) => keysInData.includes(x));
+    if (parts.length > 0) devigBooksList = parts;
+    else devigBooksList = keysInData.length > 0 ? keysInData : [...TARGET_BOOKS];
+  } else {
+    devigBooksList = keysInData.length > 0 ? keysInData : [...TARGET_BOOKS];
+  }
 
   let withFair = d.map((r) => {
     const fpRaw = Number.isFinite(r.consensus_win_prob) ? r.consensus_win_prob : r.implied;
@@ -561,21 +615,19 @@ export function buildEvTableBpp(rows, opts = {}) {
   const consensusAll = consensusMapFromRows(withFair, devigMethod);
 
   let wfConsensus = withFair;
-  if (devigSource !== "ALL" && TARGET_BOOKS.includes(devigSource)) {
-    const filt = withFair.filter((r) => r.bookmaker_key === devigSource);
+  if (devigSource !== "ALL") {
+    const src = canonicalBookKey(devigSource);
+    const filt = withFair.filter((r) => r.bookmaker_key === src);
     if (filt.length > 0) wfConsensus = filt;
   }
   const consensusFiltered = consensusMapFromRows(wfConsensus, devigMethod);
-
-  /** book col -> uppercase key */
-  const bookCol = (bk) => BOOK_ABBR_UPPER[canonicalBookKey(bk)] ?? bk.toUpperCase().slice(0, 3);
 
   const gridKey = (r) => [r.event_id, r.game, r.market, r.player, r.line_key, r.side].join("\t");
   const gridMap = new Map();
   for (const r of withFair) {
     const gk = gridKey(r);
     if (!gridMap.has(gk)) gridMap.set(gk, {});
-    const col = bookCol(r.bookmaker_key);
+    const col = bookColAbbr(r.bookmaker_key);
     const prev = gridMap.get(gk)[col];
     if (!prev || r.price > prev) gridMap.get(gk)[col] = r.price;
   }
@@ -603,19 +655,16 @@ export function buildEvTableBpp(rows, opts = {}) {
     const gk = gridKey(bp);
     if ((bookDepth.get(gk) ?? 0) < minBooks) continue;
 
-    const gridPrices = gridMap.get(gk) ?? {};
     let bestPrice = NaN;
     let bestKey = null;
     let bestEvPick = -Infinity;
-    for (const bkk of TARGET_BOOKS) {
-      const ab = bookCol(bkk);
-      const pr = gridPrices[ab];
-      if (!Number.isFinite(pr)) continue;
-      const ev = calcEvPct(cons.fair_prob, pr);
+    for (const cand of withFair) {
+      if (gridKey(cand) !== gk) continue;
+      const ev = calcEvPct(cons.fair_prob, cand.price);
       if (Number.isFinite(ev) && ev > bestEvPick) {
         bestEvPick = ev;
-        bestPrice = pr;
-        bestKey = bkk;
+        bestPrice = cand.price;
+        bestKey = cand.bookmaker_key;
       }
     }
     if (!Number.isFinite(bestPrice)) {
@@ -640,7 +689,7 @@ export function buildEvTableBpp(rows, opts = {}) {
       side: bp.side,
       away_team: bp.away_team,
       home_team: bp.home_team,
-      best_book: BOOK_DISPLAY[canonicalBookKey(bestKey)] ?? bp.bookmaker,
+      best_book: bookLabelForKey(bestKey) || bp.bookmaker,
       best_book_key: canonicalBookKey(bestKey),
       best_price: bestPrice,
       fair_prob: cons.fair_prob,
@@ -654,14 +703,14 @@ export function buildEvTableBpp(rows, opts = {}) {
       cs_star: Number.isFinite(bp.cs_star) ? bp.cs_star : null,
       kelly_fmt:
         !Number.isFinite(kelly) || bankroll <= 0 ? "—" : kelly <= 0 ? "$0" : `$${kelly.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`,
-      books: { ...gridPrices },
+      books: { ...(gridMap.get(gk) ?? {}) },
     });
   }
 
   out.sort((a, b) => b.ev_pct - a.ev_pct);
   const maxTable = envInt("MLB_SCANNER_MAX_TABLE_ROWS", envInt("MLB_SHINY_MAX_TABLE_ROWS", 0));
-  if (maxTable > 0 && out.length > maxTable) return out.slice(0, maxTable);
-  return out;
+  const sliced = maxTable > 0 && out.length > maxTable ? out.slice(0, maxTable) : out;
+  return { rows: sliced, booksForUi };
 }
 
 function median(arr) {

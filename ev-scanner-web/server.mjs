@@ -24,6 +24,21 @@ import {
   BPP_MARKET_KEY_TO_BET_ID,
 } from "./lib/constants.mjs";
 
+/** Merge server book metadata with any extra `r.books` columns (e.g. after Odds-Screen overlay). */
+function mergeBooksPayload(evRows, baseBooks) {
+  const byAbbr = new Map((baseBooks ?? []).map((b) => [b.abbr, { ...b }]));
+  for (const r of evRows ?? []) {
+    for (const ab of Object.keys(r.books || {})) {
+      if (!byAbbr.has(ab)) {
+        byAbbr.set(ab, { key: String(ab).toLowerCase(), label: ab, abbr: ab });
+      }
+    }
+  }
+  const primary = (baseBooks ?? []).map((b) => b.abbr).filter((a) => byAbbr.has(a));
+  const rest = [...byAbbr.keys()].filter((a) => !primary.includes(a)).sort();
+  return [...primary.map((a) => byAbbr.get(a)), ...rest.map((a) => byAbbr.get(a))].filter(Boolean);
+}
+
 const ALLOW_DEVIG_METHOD = new Set([
   "multiplicative",
   "additive",
@@ -128,6 +143,7 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
   };
 
   let ev;
+  let booksPayload = [];
   if (process.env.MLB_SCANNER_ODDS_SCREEN === "1") {
     const os = await mergeOddsScreenPrices(flat, buildOpts);
     flat = os.flat;
@@ -142,10 +158,14 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
         stats.odds_screen_merged_cells ?? 0,
       );
     }
-    ev = buildEvTableBpp(flat, buildOpts);
+    const evBundle = buildEvTableBpp(flat, buildOpts);
+    ev = evBundle.rows;
+    booksPayload = evBundle.booksForUi ?? [];
     if (os.priceMap?.size) ev = applyOddsScreenToEvRows(ev, os.priceMap);
   } else {
-    ev = buildEvTableBpp(flat, buildOpts);
+    const evBundle = buildEvTableBpp(flat, buildOpts);
+    ev = evBundle.rows;
+    booksPayload = evBundle.booksForUi ?? [];
   }
   stats.ev_table_rows = ev.length;
   console.error("[mlb-ev] ev table rows:", ev.length);
@@ -173,6 +193,11 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
   const games = [...new Set(ev.map((r) => r.game))].sort();
   const markets = [...new Set(ev.map((r) => r.market))].sort();
 
+  if (!booksPayload.length) {
+    booksPayload = TARGET_BOOKS.map((k) => ({ key: k, label: BOOK_DISPLAY[k] ?? k, abbr: BOOK_ABBR_UPPER[k] ?? k }));
+  }
+  const booksOut = mergeBooksPayload(ev, booksPayload);
+
   const payload = {
     ok: true,
     fetchedAt: new Date().toISOString(),
@@ -181,7 +206,7 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
     markets,
     marketLabels: Object.fromEntries(markets.map((m) => [m, MARKET_LABELS[m] ?? m])),
     rows: ev,
-    books: TARGET_BOOKS.map((k) => ({ key: k, label: BOOK_DISPLAY[k] ?? k, abbr: BOOK_ABBR_UPPER[k] ?? k })),
+    books: booksOut,
     betMarket:
       betMarketId === 0
         ? "All"

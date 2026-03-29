@@ -53,6 +53,9 @@ function canonicalBookKey(x) {
   if (["novig", "novig_us", "novig_exchange", "nvg", "nv", "nvig", "no_vig", "no-vig", "no vig"].includes(k))
     return "novig";
   if (k === "bet365") return "bet365";
+  if (["betvictor", "bvd", "bv"].includes(k)) return "betvictor";
+  if (["kalshi", "kal"].includes(k)) return "kalshi";
+  if (["hardrock", "hrk", "hardrockbet"].includes(k)) return "hardrock";
   return k;
 }
 
@@ -391,7 +394,9 @@ export function applyOddsScreenToEvRows(evRows, priceMap) {
       bp_fmt,
       best_price: bestPrice,
       best_book_key: bestKey,
-      best_book: BOOK_DISPLAY[bestKey] ?? bestKey,
+      best_book:
+        BOOK_DISPLAY[bestKey] ??
+        (String(bestKey).startsWith("bpp_") ? bestKey.slice(4).toUpperCase() : bestKey),
       best_price_fmt: fmtAmerican(bestPrice),
       implied_fmt,
     };
@@ -408,7 +413,8 @@ export async function mergeOddsScreenPrices(flat, buildOpts) {
   if (!flat.length) return { flat, stats: {}, priceMap: null };
 
   const evProbe = buildEvTableBpp(flat, buildOpts);
-  const allowed = allowedGamesByDateFromEvRows(evProbe);
+  const probeRows = evProbe.rows ?? evProbe;
+  const allowed = allowedGamesByDateFromEvRows(probeRows);
   let totalAllowedGames = 0;
   for (const s of allowed.values()) totalAllowedGames += s.size;
   if (totalAllowedGames === 0) {

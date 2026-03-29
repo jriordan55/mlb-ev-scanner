@@ -334,8 +334,9 @@ function dedupeRows(rows) {
  * Positive-EV.php HTML is very large (~15–20MB). Short timeouts abort mid-download → 0 rows.
  * Default 90s; cap 180s. Env: MLB_SCANNER_BPP_TIMEOUT_SEC (or MLB_SHINY_BPP_TIMEOUT_SEC).
  */
-export async function fetchPositiveEvForDate(dateStr, timeoutSec) {
-  const u = `${BALLPARK_PAL_POSITIVE_EV_URL}?date=${dateStr}+00%3A00%3A00&UseMyBooks=0&BetMarket=0`;
+export async function fetchPositiveEvForDate(dateStr, timeoutSec, betMarketId = 0) {
+  const bm = Number.isFinite(Number(betMarketId)) && Number(betMarketId) >= 0 ? Math.floor(Number(betMarketId)) : 0;
+  const u = `${BALLPARK_PAL_POSITIVE_EV_URL}?date=${encodeURIComponent(dateStr)}&UseMyBooks=0&BetMarket=${bm}`;
   const sec = Math.min(180, Math.max(20, timeoutSec));
   const headers = {
     Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -370,7 +371,8 @@ export async function fetchPositiveEvForDate(dateStr, timeoutSec) {
   }
 }
 
-export async function fetchBallparkPalOddsFlat() {
+export async function fetchBallparkPalOddsFlat(opts = {}) {
+  const betMarketId = opts.betMarketId ?? 0;
   const to = envNum("MLB_SCANNER_BPP_TIMEOUT_SEC", envNum("MLB_SHINY_BPP_TIMEOUT_SEC", 90));
   const days = envInt("MLB_SCANNER_BPP_FETCH_DAYS", 2);
   const nDays = days >= 1 && days <= 2 ? days : 2;
@@ -388,14 +390,17 @@ export async function fetchBallparkPalOddsFlat() {
   let t0;
   let t1r;
   if (nDays === 1) {
-    t0 = await fetchPositiveEvForDate(d0, to);
+    t0 = await fetchPositiveEvForDate(d0, to, betMarketId);
     t1r = { flat: [], status: "—", htmlLen: 0 };
   } else if (parallel) {
-    [t0, t1r] = await Promise.all([fetchPositiveEvForDate(d0, to), fetchPositiveEvForDate(d1, to)]);
+    [t0, t1r] = await Promise.all([
+      fetchPositiveEvForDate(d0, to, betMarketId),
+      fetchPositiveEvForDate(d1, to, betMarketId),
+    ]);
   } else {
     // Default: one ~18MB download at a time — fewer timeouts on slow links / less RAM spike.
-    t0 = await fetchPositiveEvForDate(d0, to);
-    t1r = await fetchPositiveEvForDate(d1, to);
+    t0 = await fetchPositiveEvForDate(d0, to, betMarketId);
+    t1r = await fetchPositiveEvForDate(d1, to, betMarketId);
   }
 
   let flat = [...t0.flat, ...t1r.flat];
@@ -505,7 +510,17 @@ export function buildEvTableBpp(rows, opts = {}) {
   }
   const bestPrices = [...bestByKey.values()];
 
-  function consensusMapFromRows(rows) {
+  const bpByPropAll = new Map();
+  for (const r of withFair) {
+    const pk = [r.event_id, r.market, r.player, r.line_key].join("\t");
+    if (!bpByPropAll.has(pk)) bpByPropAll.set(pk, {});
+    const sd = r.side;
+    if ((sd === "over" || sd === "under") && r.bp_price != null && Number.isFinite(Number(r.bp_price))) {
+      bpByPropAll.get(pk)[sd] = Number(r.bp_price);
+    }
+  }
+
+  function consensusMapFromRows(rows, devigMethodUsed) {
     const m = new Map();
     for (const r of rows) {
       const k = [r.event_id, r.game, r.market, r.market_label, r.player, r.line_key, r.side].join("\t");
@@ -514,6 +529,26 @@ export function buildEvTableBpp(rows, opts = {}) {
     }
     const out = new Map();
     for (const [k, arr] of m) {
+      const parts = k.split("\t");
+      if (parts.length >= 7) {
+        const side = parts[6];
+        const pk = [parts[0], parts[2], parts[4], parts[5]].join("\t");
+        const bo = bpByPropAll.get(pk);
+        const bpO = bo?.over;
+        const bpU = bo?.under;
+        if (Number.isFinite(bpO) && Number.isFinite(bpU)) {
+          const pO = toProb(bpO);
+          const pU = toProb(bpU);
+          if (Number.isFinite(pO) && Number.isFinite(pU)) {
+            const [fO, fU] = devigTwoWayAggregate(pO, pU, devigMethodUsed);
+            const fp = side === "over" ? fO : fU;
+            if (Number.isFinite(fp)) {
+              const fairProb = Math.min(0.98, Math.max(0.02, fp));
+              arr.push({ fair_prob: fairProb, fair_odds: probToAmerican(fairProb) });
+            }
+          }
+        }
+      }
       const medProb = median(arr.map((x) => x.fair_prob));
       const medOdds = median(arr.map((x) => x.fair_odds));
       if (!Number.isFinite(medProb) || !Number.isFinite(medOdds)) continue;
@@ -522,15 +557,15 @@ export function buildEvTableBpp(rows, opts = {}) {
     return out;
   }
 
-  /** Always: all books (fallback when "Fair from" book did not post that side). */
-  const consensusAll = consensusMapFromRows(withFair);
+  /** Always: all books (fallback when "Fair from" book did not post that side). BP model included in median when O/U pair exists. */
+  const consensusAll = consensusMapFromRows(withFair, devigMethod);
 
   let wfConsensus = withFair;
   if (devigSource !== "ALL" && TARGET_BOOKS.includes(devigSource)) {
     const filt = withFair.filter((r) => r.bookmaker_key === devigSource);
     if (filt.length > 0) wfConsensus = filt;
   }
-  const consensusFiltered = consensusMapFromRows(wfConsensus);
+  const consensusFiltered = consensusMapFromRows(wfConsensus, devigMethod);
 
   /** book col -> uppercase key */
   const bookCol = (bk) => BOOK_ABBR_UPPER[canonicalBookKey(bk)] ?? bk.toUpperCase().slice(0, 3);
@@ -569,19 +604,27 @@ export function buildEvTableBpp(rows, opts = {}) {
     if ((bookDepth.get(gk) ?? 0) < minBooks) continue;
 
     const gridPrices = gridMap.get(gk) ?? {};
-    let bestPrice = bp.price;
-    let bestPriceFmt = fmtAmerican(bestPrice);
-    let impliedFmt = (toProb(bestPrice) * 100).toFixed(1) + "%";
-    let evPct = calcEvPct(cons.fair_prob, bestPrice);
-
-    const bkU = bookCol(bp.bookmaker_key);
-    const gridPr = gridPrices[bkU];
-    if (Number.isFinite(gridPr)) {
-      bestPrice = gridPr;
-      bestPriceFmt = fmtAmerican(gridPr);
-      impliedFmt = (toProb(gridPr) * 100).toFixed(1) + "%";
-      evPct = calcEvPct(cons.fair_prob, gridPr);
+    let bestPrice = NaN;
+    let bestKey = null;
+    let bestEvPick = -Infinity;
+    for (const bkk of TARGET_BOOKS) {
+      const ab = bookCol(bkk);
+      const pr = gridPrices[ab];
+      if (!Number.isFinite(pr)) continue;
+      const ev = calcEvPct(cons.fair_prob, pr);
+      if (Number.isFinite(ev) && ev > bestEvPick) {
+        bestEvPick = ev;
+        bestPrice = pr;
+        bestKey = bkk;
+      }
     }
+    if (!Number.isFinite(bestPrice)) {
+      bestPrice = bp.price;
+      bestKey = bp.bookmaker_key;
+    }
+    const bestPriceFmt = fmtAmerican(bestPrice);
+    const impliedFmt = (toProb(bestPrice) * 100).toFixed(1) + "%";
+    const evPct = calcEvPct(cons.fair_prob, bestPrice);
 
     const kelly = kellyBetDollars(cons.fair_prob, bestPrice, bankroll, kellyFrac);
     const bpModel = bpByGrid.get(gk);
@@ -597,8 +640,8 @@ export function buildEvTableBpp(rows, opts = {}) {
       side: bp.side,
       away_team: bp.away_team,
       home_team: bp.home_team,
-      best_book: bp.bookmaker,
-      best_book_key: bp.bookmaker_key,
+      best_book: BOOK_DISPLAY[canonicalBookKey(bestKey)] ?? bp.bookmaker,
+      best_book_key: canonicalBookKey(bestKey),
       best_price: bestPrice,
       fair_prob: cons.fair_prob,
       fair_odds: cons.fair_odds,

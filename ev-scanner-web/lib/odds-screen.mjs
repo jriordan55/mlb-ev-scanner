@@ -402,7 +402,7 @@ export function applyOddsScreenToEvRows(evRows, priceMap) {
  * Recompute +EV rows to get the pre-game slate, fetch Odds-Screen for those games only, overlay prices.
  */
 export async function mergeOddsScreenPrices(flat, buildOpts) {
-  if (process.env.MLB_SCANNER_ODDS_SCREEN === "0") {
+  if (process.env.MLB_SCANNER_ODDS_SCREEN !== "1") {
     return { flat, stats: {}, priceMap: null };
   }
   if (!flat.length) return { flat, stats: {}, priceMap: null };

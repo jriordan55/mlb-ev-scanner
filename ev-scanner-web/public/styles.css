@@ -182,6 +182,45 @@ body {
   font-size: 10px;
 }
 
+.bh-logo-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bh-logo-only img {
+  display: block;
+}
+
+.bp-head {
+  min-width: 36px;
+}
+
+.matchup-logos {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.matchup-logos .at {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.td-matchup {
+  vertical-align: middle;
+}
+
+.td-best-logo {
+  vertical-align: middle;
+}
+
+.best-book-logo {
+  display: block;
+  margin: 0 auto;
+}
+
 .modal {
   max-width: 520px;
   border: 1px solid var(--border);

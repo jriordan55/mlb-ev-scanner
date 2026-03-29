@@ -74,6 +74,30 @@ export const BPP_BETMARKET_MAP = {
   24: "pitcher_outs",
 };
 
+/** market_key → Positive-EV.php `BetMarket` id (0 = all markets). */
+export const BPP_MARKET_KEY_TO_BET_ID = Object.fromEntries(
+  Object.entries(BPP_BETMARKET_MAP).map(([id, key]) => [key, Number(id)]),
+);
+
+/** BPP abbr → slug for ESPN MLB logos (500px). */
+export const MLB_LOGO_ABBR = {
+  ATH: "oak",
+  WSH: "wsh",
+  SFG: "sf",
+  TBR: "tb",
+  KCR: "kc",
+};
+
+export function mlbTeamLogoUrl(abbr) {
+  const a = String(abbr ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  if (!a) return "";
+  const slug = String(MLB_LOGO_ABBR[a] ?? a).toLowerCase();
+  return `https://a.espncdn.com/i/teamlogos/mlb/500/${slug}.png`;
+}
+
 /** @type {Record<string, string>} */
 const TEAM_KEYS = {
   "arizona diamondbacks": "ari",

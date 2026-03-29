@@ -7,6 +7,32 @@ const FAVICON = {
   caesars: "caesars.com",
 };
 
+const BP_FAV_DOMAIN = "ballparkpal.com";
+const MLB_LOGO_ABBR = { ATH: "oak", WSH: "wsh", SFG: "sf", TBR: "tb", KCR: "kc" };
+
+function mlbLogoUrl(abbr) {
+  const a = String(abbr ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  if (!a) return "";
+  const slug = String(MLB_LOGO_ABBR[a] ?? a).toLowerCase();
+  return `https://a.espncdn.com/i/teamlogos/mlb/500/${slug}.png`;
+}
+
+/** Table cell: American odds, or blank if missing / placeholder dash. */
+function cellAmerican(x) {
+  const n = Math.round(Number(x));
+  if (!Number.isFinite(n)) return "";
+  return n > 0 ? `+${n}` : String(n);
+}
+
+function cellDashBlank(s) {
+  const t = String(s ?? "").trim();
+  if (!t || t === "—" || t === "-" || t === "–") return "";
+  return t;
+}
+
 function favUrl(domain) {
   return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : "";
 }
@@ -140,6 +166,8 @@ function scanUrl(opts = {}) {
   p.set("devigMethod", document.getElementById("devigMethod")?.value || "multiplicative");
   p.set("devigBooks", document.getElementById("devigBooks")?.value || "ALL");
   p.set("devigSource", document.getElementById("devigSource")?.value || "ALL");
+  const mk = document.getElementById("market")?.value || "All";
+  p.set("market", mk === "All" ? "All" : mk);
   const qs = p.toString();
   const path = `/api/scan${qs ? `?${qs}` : ""}`;
   const o = apiOrigin();
@@ -185,7 +213,7 @@ async function load(opts = {}) {
   const tick = setInterval(() => {
     if (seq !== loadSeq) return;
     const sec = Math.round((Date.now() - t0) / 1000);
-    status.textContent = `Loading odds… ${sec}s · server is fetching Ballpark Pal (large pages) and may run Odds Screen — often 30s–3m; Render free tier can cold-start too`;
+    status.textContent = `Loading… ${sec}s`;
   }, 2000);
 
   if (window.location.protocol === "file:") {
@@ -213,17 +241,16 @@ async function load(opts = {}) {
     lastData = data;
     fillFilters(data);
     redraw();
-    const n = applyFilters(data.rows).length;
     const st = data.stats || {};
-    const warn = Array.isArray(st.warnings) && st.warnings.length ? ` · ⚠ ${st.warnings.join(" ")}` : "";
-    status.textContent = `Updated ${new Date(data.fetchedAt).toLocaleString()} · showing ${n} of ${data.rows.length} table rows · raw odds ${st.flat_odds_rows ?? "?"} · HTTP ${st.http_status ?? ""}${warn}`;
+    let line = new Date(data.fetchedAt).toLocaleString();
+    if (Array.isArray(st.warnings) && st.warnings.length) line += ` · ⚠ ${st.warnings.join(" ")}`;
+    status.textContent = line;
     if (data.rows.length === 0 && (st.flat_odds_rows ?? 0) === 0) {
       const origin = apiOrigin() || "";
       const base = origin || window.location.origin || "";
-      status.textContent += ` — No raw odds. Open ${base}/api/health in a new tab (server up?). In the terminal running npm start you should see [mlb-ev] lines with row counts. Try: longer timeout (set MLB_SCANNER_BPP_TIMEOUT_SEC=120), only today (MLB_SCANNER_BPP_FETCH_DAYS=1), or ?skipPf=1.`;
+      status.textContent += ` — No odds (timeout/block/off-season?). Try ${base}/api/health`;
     } else if (data.rows.length === 0 && (st.flat_odds_rows ?? 0) > 0) {
-      status.textContent +=
-        " — Raw odds loaded but EV table is empty. Set env MLB_SCANNER_MIN_BOOKS_SAME_LINE=1 on the server and redeploy, or widen book coverage.";
+      status.textContent += " — EV table empty (try MLB_SCANNER_MIN_BOOKS_SAME_LINE=1 on server).";
     }
   } catch (e) {
     if (seq !== loadSeq) return;
@@ -251,28 +278,28 @@ function redraw() {
   const rows = applyFilters(lastData.rows);
   const br = getBankroll();
   render(rows, br, lastData.books || []);
-  const status = document.getElementById("status");
-  if (lastData.stats) {
-    status.textContent = `Updated ${new Date(lastData.fetchedAt).toLocaleString()} · showing ${rows.length} of ${lastData.rows.length} rows · HTTP ${lastData.stats.http_status ?? ""}`;
-  }
 }
 
 function fillFilters(data) {
   const mk = document.getElementById("market");
   if (mk) {
     const curM = mk.value;
+    const pool =
+      data.marketKeys?.length ? data.marketKeys : data.markets?.length ? data.markets : [];
     mk.innerHTML = "";
     const mo = document.createElement("option");
     mo.value = "All";
     mo.textContent = "All";
     mk.appendChild(mo);
-    for (const m of data.markets || []) {
+    for (const m of pool) {
       const o = document.createElement("option");
       o.value = m;
       o.textContent = data.marketLabels?.[m] || m;
       mk.appendChild(o);
     }
-    if ([...mk.options].some((o) => o.value === curM)) mk.value = curM;
+    const prefer = data.betMarket && [...mk.options].some((o) => o.value === data.betMarket) ? data.betMarket : curM;
+    if ([...mk.options].some((o) => o.value === prefer)) mk.value = prefer;
+    else if ([...mk.options].some((o) => o.value === curM)) mk.value = curM;
   }
 
   const gm = document.getElementById("game");
@@ -314,18 +341,33 @@ function fillFilters(data) {
     while (thead.lastElementChild?.classList.contains("book-head")) {
       thead.removeChild(thead.lastChild);
     }
+    const bpTh = document.createElement("th");
+    bpTh.className = "book-head bp-head";
+    bpTh.title = "Ballpark Pal model — used in fair / devig; not bettable";
+    bpTh.innerHTML = `<span class="bh bh-logo-only"><img src="${esc(favUrl(BP_FAV_DOMAIN))}" alt="" width="20" height="20"/></span>`;
+    thead.appendChild(bpTh);
     for (const b of data.books || []) {
       const th = document.createElement("th");
       th.className = "book-head";
+      th.title = b.label;
       const dom = FAVICON[b.key];
-      if (dom) {
-        th.innerHTML = `<span class="bh"><img src="${favUrl(dom)}" alt="" width="18" height="18" /> ${esc(b.label)}</span>`;
-      } else {
-        th.textContent = b.label;
-      }
+      th.innerHTML = dom
+        ? `<span class="bh bh-logo-only"><img src="${esc(favUrl(dom))}" alt="" width="20" height="20"/></span>`
+        : esc(b.label);
       thead.appendChild(th);
     }
   }
+}
+
+function matchupCell(game) {
+  const raw = String(game ?? "").trim();
+  const m = raw.match(/^\s*([A-Za-z]{2,4})\s*@\s*([A-Za-z]{2,4})\s*$/);
+  if (!m) return `<td class="td-matchup">${esc(raw)}</td>`;
+  const a = m[1].toUpperCase();
+  const h = m[2].toUpperCase();
+  const ua = esc(mlbLogoUrl(a));
+  const ub = esc(mlbLogoUrl(h));
+  return `<td class="td-matchup"><span class="matchup-logos"><img src="${ua}" alt="" width="22" height="22" loading="lazy" decoding="async"/><span class="at">@</span><img src="${ub}" alt="" width="22" height="22" loading="lazy" decoding="async"/></span></td>`;
 }
 
 function render(rows, bankroll, books) {
@@ -353,46 +395,68 @@ function render(rows, bankroll, books) {
       boostPct > 0 ? applyProfitBoostAmerican(r.best_price, boostPct) : r.best_price;
     const evNum = calcEvPct(r.fair_prob, effBest);
     const evc = evClass(evNum);
-    const cs =
-      r.cs_star != null && Number.isFinite(Number(r.cs_star))
-        ? Number(r.cs_star) > 0
-          ? `+${Math.round(Number(r.cs_star))}`
-          : String(Math.round(Number(r.cs_star)))
-        : "—";
-    const kelly = formatKelly(r.fair_prob, effBest, bankroll);
+    let cs = "";
+    if (r.cs_star != null && Number.isFinite(Number(r.cs_star))) {
+      const n = Math.round(Number(r.cs_star));
+      cs = n > 0 ? `+${n}` : String(n);
+    }
+    const kellyRaw = formatKelly(r.fair_prob, effBest, bankroll);
+    const kelly = cellDashBlank(kellyRaw);
     const bestAbbr = keyToAbbr[r.best_book_key] || "";
     const dom = FAVICON[r.best_book_key] || "";
 
     const tp = toProbAmerican(effBest);
-    const impliedFmt = Number.isFinite(tp) ? `${(tp * 100).toFixed(1)}%` : "—";
-    const bestPriceFmt = formatAm(effBest);
-    const evStr = Number.isFinite(evNum) ? `${evNum.toFixed(2)}%` : "—";
-    const cells = [
-      `<td class="${evc}">${evStr}</td>`,
+    const impliedFmt = Number.isFinite(tp) ? `${(tp * 100).toFixed(1)}%` : "";
+    const bestPriceStr = cellAmerican(effBest);
+    const evStr = Number.isFinite(evNum) ? `${evNum.toFixed(2)}%` : "";
+    const fairDisp = cellDashBlank(r.fair_fmt);
+    const bestImg = dom
+      ? `<img class="best-book-logo" src="${esc(favUrl(dom))}" alt="" width="20" height="20" onerror="this.style.display='none'"/>`
+      : "";
+    const bpStr =
+      r.bp_price != null && Number.isFinite(Number(r.bp_price))
+        ? cellAmerican(r.bp_price)
+        : cellDashBlank(r.bp_fmt);
+
+    const staticCells = [
+      `<td class="${evc}">${esc(evStr)}</td>`,
       `<td>${esc(kelly)}</td>`,
-      `<td><span class="book-mini"><img src="${favUrl(dom)}" alt="" width="16" height="16" onerror="this.style.display='none'"/> ${esc(r.best_book || "")}</span></td>`,
+      `<td class="td-best-logo">${bestImg}</td>`,
       `<td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">${esc(r.player)}</td>`,
       `<td>${esc(r.line)}</td>`,
-      `<td>${esc(r.fair_fmt)}</td>`,
-      `<td>${esc(cs)}</td>`,
-      `<td>${esc(impliedFmt)}</td>`,
-      `<td>${esc(bestPriceFmt)}</td>`,
-      `<td>${esc(r.bp_fmt ?? (r.bp_price != null && Number.isFinite(r.bp_price) ? formatAm(r.bp_price) : "—"))}</td>`,
+      `<td>${fairDisp ? esc(fairDisp) : ""}</td>`,
+      `<td>${cs ? esc(cs) : ""}</td>`,
+      `<td>${impliedFmt ? esc(impliedFmt) : ""}</td>`,
+      `<td>${bestPriceStr ? esc(bestPriceStr) : ""}</td>`,
       `<td>${esc(r.market_label)}</td>`,
       `<td>${esc(r.side)}</td>`,
-      `<td>${esc(r.game)}</td>`,
-      `<td class="${bppClass(r.bpp_hr)}">${esc(r.bpp_hr)}</td>`,
-      `<td class="${bppClass(r.bpp_2b3b)}">${esc(r.bpp_2b3b)}</td>`,
-      `<td class="${bppClass(r.bpp_1b)}">${esc(r.bpp_1b)}</td>`,
-      `<td class="${bppClass(r.bpp_runs)}">${esc(r.bpp_runs)}</td>`,
+      matchupCell(r.game),
+      `<td class="${bppClass(r.bpp_hr)}">${(() => {
+        const x = cellDashBlank(r.bpp_hr);
+        return x ? esc(x) : "";
+      })()}</td>`,
+      `<td class="${bppClass(r.bpp_2b3b)}">${(() => {
+        const x = cellDashBlank(r.bpp_2b3b);
+        return x ? esc(x) : "";
+      })()}</td>`,
+      `<td class="${bppClass(r.bpp_1b)}">${(() => {
+        const x = cellDashBlank(r.bpp_1b);
+        return x ? esc(x) : "";
+      })()}</td>`,
+      `<td class="${bppClass(r.bpp_runs)}">${(() => {
+        const x = cellDashBlank(r.bpp_runs);
+        return x ? esc(x) : "";
+      })()}</td>`,
     ];
+    const bpTd = `<td>${bpStr ? `<span class="bp-col">${esc(bpStr)}</span>` : ""}</td>`;
+    const bookCells = [];
     for (const b of books) {
       const raw = r.books?.[b.abbr];
-      let inner = raw != null && Number.isFinite(raw) ? formatAm(raw) : "—";
-      if (b.abbr === bestAbbr && inner !== "—") inner = `<span class="best-cell">${inner}</span>`;
-      cells.push(`<td>${inner}</td>`);
+      let inner = raw != null && Number.isFinite(raw) ? cellAmerican(raw) : "";
+      if (b.abbr === bestAbbr && inner) inner = `<span class="best-cell">${esc(inner)}</span>`;
+      bookCells.push(`<td>${inner}</td>`);
     }
-    tr.innerHTML = cells.join("");
+    tr.innerHTML = [...staticCells, bpTd, ...bookCells].join("");
     frag.appendChild(tr);
   }
   tb.innerHTML = "";
@@ -415,9 +479,10 @@ const reloadScan = debounce(() => load(), 350);
   document.getElementById(id)?.addEventListener("change", () => reloadScan());
 });
 
-["market", "game", "ou", "bestBook"].forEach((id) => {
+["game", "ou", "bestBook"].forEach((id) => {
   document.getElementById(id)?.addEventListener("change", () => redraw());
 });
+document.getElementById("market")?.addEventListener("change", () => reloadScan());
 
 document.getElementById("bankroll")?.addEventListener("input", debounce(() => redraw(), 200));
 

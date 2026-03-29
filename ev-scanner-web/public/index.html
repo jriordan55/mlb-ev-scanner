@@ -24,53 +24,6 @@
     <label class="pill">Market
       <select id="market"><option value="All">All</option></select>
     </label>
-    <label class="pill prop-pill">Devig method
-      <select id="devigMethod">
-        <option value="multiplicative">Multiplicative</option>
-        <option value="additive">Additive</option>
-        <option value="probit">Probit</option>
-        <option value="shin">Shin</option>
-        <option value="power">Power</option>
-        <option value="worst_case">Worst case</option>
-        <option value="average">Average</option>
-      </select>
-    </label>
-    <label class="pill prop-pill">Devig by
-      <select id="devigBooks">
-        <option value="ALL">All books</option>
-        <option value="draftkings">DraftKings</option>
-        <option value="fanduel">FanDuel</option>
-        <option value="espnbet">theScore</option>
-        <option value="betmgm">BetMGM</option>
-        <option value="novig">Novig</option>
-        <option value="caesars">Caesars</option>
-        <option value="betvictor">BetVictor</option>
-        <option value="circa">Circa</option>
-        <option value="sharp_book_price">Sharp Book Price</option>
-        <option value="bookmaker">BookMaker</option>
-        <option value="bally_bet">Bally Bet</option>
-        <option value="betrivers">Bet Rivers</option>
-        <option value="bet365">Bet365</option>
-      </select>
-    </label>
-    <label class="pill prop-pill">Fair from
-      <select id="devigSource">
-        <option value="ALL">All books</option>
-        <option value="draftkings">DraftKings</option>
-        <option value="fanduel">FanDuel</option>
-        <option value="espnbet">theScore</option>
-        <option value="betmgm">BetMGM</option>
-        <option value="novig">Novig</option>
-        <option value="caesars">Caesars</option>
-        <option value="betvictor">BetVictor</option>
-        <option value="circa">Circa</option>
-        <option value="sharp_book_price">Sharp Book Price</option>
-        <option value="bookmaker">BookMaker</option>
-        <option value="bally_bet">Bally Bet</option>
-        <option value="betrivers">Bet Rivers</option>
-        <option value="bet365">Bet365</option>
-      </select>
-    </label>
     <label class="pill">O/U
       <select id="ou">
         <option>All</option>
@@ -129,17 +82,64 @@
     </table>
   </div>
 
-  <dialog id="devigDlg" class="modal modal-wide">
-    <form method="dialog" id="devigForm">
-      <h2>Select Devig Books</h2>
-      <p class="modal-lead">Choose which books supply two-way prices for devigging and optional weights for <strong>consensus fair</strong> (median if no weights). Weights are normalized to 100%.</p>
-      <label class="dlg-search">Search
-        <input type="search" id="devigSearch" placeholder="Book name…" autocomplete="off" />
-      </label>
-      <div class="devig-grid" id="devigBookGrid"></div>
-      <p class="dlg-hint">Checked books are also sent as <strong>Devig by</strong> (comma list). Save clears custom weights if none checked.</p>
+  <dialog id="devigDlg" class="modal modal-wide devig-dlg">
+    <form id="devigForm" class="devig-dlg-form">
+      <div class="devig-dlg-head">
+        <h2>Select Devig Books</h2>
+        <button type="button" class="devig-dlg-x" id="devigCloseX" aria-label="Close">×</button>
+      </div>
+      <p class="modal-lead">
+        <strong>Method</strong> controls two-way devig. <strong>Consensus</strong> uses median market fair unless you set weights. <strong>Two-way prices from</strong> limits which books supply over/under pairs for devig (independent of weights).
+      </p>
+      <div class="devig-dlg-toolbar">
+        <input type="search" id="devigSearch" class="devig-search-input" placeholder="Search by book or percentage…" autocomplete="off" />
+        <label class="devig-method-wrap">Method
+          <select id="devigMethod">
+            <option value="multiplicative">Multiplicative</option>
+            <option value="additive">Additive</option>
+            <option value="probit">Probit</option>
+            <option value="shin">Shin</option>
+            <option value="power">Power</option>
+            <option value="worst_case">Worst case</option>
+            <option value="average">Average</option>
+          </select>
+        </label>
+      </div>
+      <div class="devig-dlg-section">
+        <div class="devig-section-title">Default</div>
+        <label class="devig-choice-tile">
+          <input type="radio" name="devigRoot" value="market" id="devigRootMarket" />
+          <span>Market Avg</span>
+        </label>
+      </div>
+      <div class="devig-dlg-section">
+        <div class="devig-section-title">100% weight</div>
+        <div class="devig-logo-grid" id="devigSingleGrid" aria-label="One book for consensus"></div>
+      </div>
+      <div class="devig-dlg-section">
+        <div class="devig-section-title">Split weights</div>
+        <label class="devig-choice-tile">
+          <input type="radio" name="devigRoot" value="custom" id="devigRootCustom" />
+          <span>Custom — use checkboxes below</span>
+        </label>
+        <div class="devig-split-bar" id="devigSplitPresets"></div>
+        <div class="devig-custom-wrap" id="devigCustomWrap">
+          <div class="devig-custom-grid" id="devigBookGrid"></div>
+        </div>
+      </div>
+      <div class="devig-dlg-section devig-advanced">
+        <label class="devig-adv-row">Fair consensus from
+          <select id="devigSource" class="devig-fullsel"></select>
+        </label>
+        <label class="devig-adv-row">Two-way devig prices from
+          <select id="devigBooks" class="devig-fullsel"></select>
+        </label>
+      </div>
+      <p class="dlg-hint">Custom weights apply to the <strong>CS*</strong> consensus column; they no longer override “Two-way devig prices from.” Apply saves preferences and rescans.</p>
       <div class="dlg-actions">
-        <button type="submit" class="top-btn" value="save">Apply &amp; rescan</button>
+        <button type="button" class="top-btn dark" id="devigAddCustom">+ Add custom</button>
+        <button type="button" class="top-btn dark" id="devigPreloads">Preloads</button>
+        <button type="submit" class="top-btn" id="devigApply">Apply &amp; rescan</button>
         <button type="button" class="top-btn dark" id="devigClear">Clear weights</button>
         <button type="button" class="top-btn dark" id="devigClose">Close</button>
       </div>
@@ -170,8 +170,8 @@
         <h3>Best book</h3>
         <p>When set to a specific sportsbook, the main table only lists props where that book posts the best price for the line. <strong>All rows</strong> shows every prop that passes the other filters, regardless of which book is best.</p>
 
-        <h3>Devig by</h3>
-        <p>Restricts which sportsbooks feed the two-way prices used in devigging. When set to all books, every available line in scope is eligible. Use <strong>Devig books…</strong> to pick multiple books and optional weights for consensus fair.</p>
+        <h3>Two-way devig prices from</h3>
+        <p>Restricts which sportsbooks supply the over/under pairs used in devigging. Consensus weights (split / 100% / market avg) are configured separately in the same modal.</p>
 
         <h3>O/U</h3>
         <p>Filters to overs only, unders only, or both.</p>
@@ -213,7 +213,7 @@
     </form>
   </dialog>
 
-  <script src="/app.js?v=20260336" type="module"></script>
+  <script src="/app.js?v=20260337" type="module"></script>
   <script>
     setTimeout(function () {
       var s = document.getElementById("status");

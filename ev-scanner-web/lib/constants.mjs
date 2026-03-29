@@ -2,29 +2,32 @@ export const BALLPARK_PAL_PF_URL = "https://www.ballparkpal.com/Park-Factors.php
 export const BALLPARK_PAL_POSITIVE_EV_URL = "https://www.ballparkpal.com/Positive-EV.php";
 export const BALLPARK_PAL_ODDS_SCREEN_URL = "https://www.ballparkpal.com/Odds-Screen.php";
 
-/** Preferred sportsbook order for UI + devig defaults (Hard Rock, Kalshi, Bovada, Sin, PRX excluded). */
+/** Preferred sportsbook order for UI + devig (aligned with Ballpark Pal Positive EV abbreviations). */
 export const TARGET_BOOKS = [
   "draftkings",
   "fanduel",
+  "pinnacle",
+  "circa",
   "espnbet",
+  "hardrock",
   "betmgm",
+  "betonline",
+  "bet365",
+  "betvictor",
   "novig",
   "caesars",
-  "betvictor",
-  "circa",
   "sharp_book_price",
   "bookmaker",
   "bally_bet",
   "betrivers",
-  "bet365",
+  "kalshi",
+  "sin_book",
+  "prx",
 ];
 
 /** Dropped from grid; rows from these keys are skipped at parse time. */
 export const SKIPPED_BOOK_KEYS = new Set([
-  "kalshi",
   "bovada",
-  "sin_book",
-  "prx",
   "polymarket",
   "bpp_poly",
   "bpp_flf",
@@ -35,33 +38,45 @@ export const SKIPPED_BOOK_KEYS = new Set([
 export const BOOK_DISPLAY = {
   draftkings: "DraftKings",
   fanduel: "FanDuel",
+  pinnacle: "Pinnacle",
   betmgm: "BetMGM",
   caesars: "Caesars",
   circa: "Circa",
   bet365: "Bet365",
-  espnbet: "theScore",
+  espnbet: "ESPN Bet",
   novig: "Novig",
   betvictor: "BetVictor",
   sharp_book_price: "Sharp Book Price",
   bookmaker: "BookMaker",
   bally_bet: "Bally Bet",
   betrivers: "Bet Rivers",
+  betonline: "BetOnline",
+  hardrock: "Hard Rock Bet",
+  kalshi: "Kalshi",
+  sin_book: "SI Sportsbook",
+  prx: "ProphetX",
 };
 
 export const BOOK_ABBR_UPPER = {
   draftkings: "DK",
   fanduel: "FD",
+  pinnacle: "PN",
   betmgm: "MGM",
   caesars: "CZR",
-  espnbet: "TS",
-  novig: "NV",
-  betvictor: "BVD",
+  espnbet: "ESPN",
+  novig: "NVG",
+  betvictor: "BV",
   circa: "CIR",
   sharp_book_price: "SBP",
   bookmaker: "BKM",
   bally_bet: "BLY",
   betrivers: "RIV",
   bet365: "B365",
+  betonline: "BOL",
+  hardrock: "HR",
+  kalshi: "KAL",
+  sin_book: "SIN",
+  prx: "PRX",
 };
 
 export const MARKET_LABELS = {

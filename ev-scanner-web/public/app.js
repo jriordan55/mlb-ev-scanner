@@ -1,53 +1,96 @@
 const FAVICON = {
   draftkings: "draftkings.com",
   fanduel: "fanduel.com",
-  espnbet: "thescore.com",
+  pinnacle: "pinnacle.com",
+  circa: "circasports.com",
+  espnbet: "espnbet.com",
   betmgm: "betmgm.com",
+  betonline: "betonline.ag",
+  bet365: "bet365.com",
+  betvictor: "betvictor.com",
   novig: "novig.com",
   caesars: "caesars.com",
-  betvictor: "betvictor.com",
-  circa: "circasports.com",
   sharp_book_price: "sportsbookreview.com",
   bookmaker: "bookmaker.eu",
   bally_bet: "ballybet.com",
   betrivers: "betrivers.com",
-  bet365: "bet365.com",
+  hardrock: "hardrock.bet",
+  kalshi: "kalshi.com",
+  sin_book: "si.com",
+  prx: "prophetx.com",
 };
 
 /** Keys listed in Devig modal (aligned with server TARGET_BOOKS). */
 const DEVIG_BOOK_KEYS = [
   "draftkings",
   "fanduel",
+  "pinnacle",
+  "circa",
   "espnbet",
+  "hardrock",
   "betmgm",
+  "betonline",
+  "bet365",
+  "betvictor",
   "novig",
   "caesars",
-  "betvictor",
-  "circa",
   "sharp_book_price",
   "bookmaker",
   "bally_bet",
   "betrivers",
-  "bet365",
+  "kalshi",
+  "sin_book",
+  "prx",
 ];
 
 const DEVIG_LABEL = {
   draftkings: "DraftKings",
   fanduel: "FanDuel",
-  espnbet: "theScore",
+  pinnacle: "Pinnacle",
+  circa: "Circa",
+  espnbet: "ESPN Bet",
+  hardrock: "Hard Rock Bet",
   betmgm: "BetMGM",
+  betonline: "BetOnline",
+  bet365: "Bet365",
+  betvictor: "BetVictor",
   novig: "Novig",
   caesars: "Caesars",
-  betvictor: "BetVictor",
-  circa: "Circa",
   sharp_book_price: "Sharp Book Price",
   bookmaker: "BookMaker",
   bally_bet: "Bally Bet",
   betrivers: "Bet Rivers",
-  bet365: "Bet365",
+  kalshi: "Kalshi",
+  sin_book: "SI Sportsbook",
+  prx: "ProphetX",
+};
+
+const BOOK_TILE_ABBR = {
+  draftkings: "DK",
+  fanduel: "FD",
+  pinnacle: "PN",
+  circa: "Circa",
+  espnbet: "ESPN",
+  hardrock: "HR",
+  betmgm: "MGM",
+  betonline: "BOL",
+  bet365: "B365",
+  betvictor: "BV",
+  novig: "NVG",
+  caesars: "CZR",
+  sharp_book_price: "SBP",
+  bookmaker: "BKM",
+  bally_bet: "BLY",
+  betrivers: "RIV",
+  kalshi: "KAL",
+  sin_book: "SIN",
+  prx: "PRX",
 };
 
 const LS_DEVIG_W = "ev_devig_weights";
+const LS_DEVIG_BOOKS = "ev_devig_books";
+const LS_DEVIG_SOURCE = "ev_devig_source";
+const LS_DEVIG_METHOD = "ev_devig_method";
 const LS_HIDE_ODDS = "ev_hide_best_odds";
 
 const BP_FAV_DOMAIN = "ballparkpal.com";
@@ -223,17 +266,89 @@ function getSavedDevigWeights() {
   }
 }
 
+function fillDevigBookSelect(selId) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = "";
+  const all = document.createElement("option");
+  all.value = "ALL";
+  all.textContent = "All books";
+  sel.appendChild(all);
+  for (const k of DEVIG_BOOK_KEYS) {
+    const o = document.createElement("option");
+    o.value = k;
+    o.textContent = DEVIG_LABEL[k] || k;
+    sel.appendChild(o);
+  }
+  const ok = [...sel.options].some((o) => o.value === prev);
+  sel.value = ok ? prev : "ALL";
+}
+
+function restoreDevigUiFromStorage() {
+  try {
+    fillDevigBookSelect("devigBooks");
+    fillDevigBookSelect("devigSource");
+    const db = localStorage.getItem(LS_DEVIG_BOOKS);
+    const ds = localStorage.getItem(LS_DEVIG_SOURCE);
+    const dm = localStorage.getItem(LS_DEVIG_METHOD);
+    const eb = document.getElementById("devigBooks");
+    const es = document.getElementById("devigSource");
+    const em = document.getElementById("devigMethod");
+    if (db && eb && [...eb.options].some((o) => o.value === db)) eb.value = db;
+    if (ds && es && [...es.options].some((o) => o.value === ds)) es.value = ds;
+    if (dm && em && [...em.options].some((o) => o.value === dm)) em.value = dm;
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Last devig root mode for search re-filter inside modal: market | custom | book:key */
+let devigRootMemory = "market";
+
+function inferDevigRootFromSaved() {
+  const s = getSavedDevigWeights();
+  if (!s || !Object.keys(s).length) return "market";
+  const keys = Object.keys(s);
+  if (keys.length === 1) return `book:${keys[0]}`;
+  return "custom";
+}
+
+function applyDevigRootSelection(val) {
+  const el = [...document.querySelectorAll('input[name="devigRoot"]')].find((r) => r.value === val);
+  if (el) {
+    el.checked = true;
+    devigRootMemory = val;
+    return;
+  }
+  const s = getSavedDevigWeights();
+  const cc = document.getElementById("devigRootCustom");
+  if (cc && s && Object.keys(s).length > 1) {
+    cc.checked = true;
+    devigRootMemory = "custom";
+    return;
+  }
+  const one = s && Object.keys(s).length === 1 ? `book:${Object.keys(s)[0]}` : null;
+  const el2 = one ? [...document.querySelectorAll('input[name="devigRoot"]')].find((r) => r.value === one) : null;
+  if (el2) {
+    el2.checked = true;
+    devigRootMemory = one;
+    return;
+  }
+  const m = document.getElementById("devigRootMarket");
+  if (m) m.checked = true;
+  devigRootMemory = "market";
+}
+
 function scanUrl(opts = {}) {
   const p = new URLSearchParams();
   if (window.location.search.includes("skipPf=1")) p.set("skipPf", "1");
   if (opts.nocache) p.set("nocache", "1");
   p.set("devigMethod", document.getElementById("devigMethod")?.value || "multiplicative");
+  p.set("devigBooks", document.getElementById("devigBooks")?.value || "ALL");
   const wMap = getSavedDevigWeights();
   if (wMap && Object.keys(wMap).length) {
     p.set("devigWeights", JSON.stringify(wMap));
-    p.set("devigBooks", Object.keys(wMap).join(","));
-  } else {
-    p.set("devigBooks", document.getElementById("devigBooks")?.value || "ALL");
   }
   p.set("devigSource", document.getElementById("devigSource")?.value || "ALL");
   const mk = document.getElementById("market")?.value || "All";
@@ -570,6 +685,34 @@ function debounce(fn, ms) {
 document.getElementById("btnRefresh")?.addEventListener("click", () => load({ nocache: true }));
 document.getElementById("btnHelp")?.addEventListener("click", () => document.getElementById("helpDlg")?.showModal());
 
+function ensureDevigSplitPresets() {
+  const el = document.getElementById("devigSplitPresets");
+  if (!el || el.dataset.inited === "1") return;
+  el.dataset.inited = "1";
+  el.innerHTML = `<button type="button" class="devig-split-btn" data-devig-preset="market">Market avg</button><button type="button" class="devig-split-btn" data-devig-preset="fd-dk-50">FD / DK 50% · Equal</button>`;
+}
+
+function buildDevigSingleGrid() {
+  const grid = document.getElementById("devigSingleGrid");
+  if (!grid) return;
+  const q = (document.getElementById("devigSearch")?.value || "").toLowerCase().trim();
+  grid.innerHTML = "";
+  for (const key of DEVIG_BOOK_KEYS) {
+    const label = DEVIG_LABEL[key] || key;
+    const abbr = BOOK_TILE_ABBR[key] || key.slice(0, 4).toUpperCase();
+    if (q && !label.toLowerCase().includes(q) && !key.includes(q) && !String(abbr).toLowerCase().includes(q)) continue;
+    const dom = FAVICON[key];
+    const src = dom ? favUrl(dom) : "";
+    const lab = document.createElement("label");
+    lab.className = "devig-tile";
+    const imgPart = src
+      ? `<img class="devig-tile-img" src="${esc(src)}" alt="" width="28" height="28" loading="lazy" />`
+      : `<span class="devig-tile-fallback">${esc(abbr)}</span>`;
+    lab.innerHTML = `<input type="radio" name="devigRoot" value="book:${key}" class="devig-root-book" /><span class="devig-tile-inner">${imgPart}<span class="devig-tile-abbr">${esc(abbr)}</span></span>`;
+    grid.appendChild(lab);
+  }
+}
+
 function buildDevigModalGrid() {
   const grid = document.getElementById("devigBookGrid");
   if (!grid) return;
@@ -578,49 +721,122 @@ function buildDevigModalGrid() {
   grid.innerHTML = "";
   for (const key of DEVIG_BOOK_KEYS) {
     const label = DEVIG_LABEL[key] || key;
-    if (q && !label.toLowerCase().includes(q) && !key.includes(q)) continue;
+    const abbr = BOOK_TILE_ABBR[key] || key;
+    if (q && !label.toLowerCase().includes(q) && !key.includes(q) && !String(abbr).toLowerCase().includes(q)) continue;
     const row = document.createElement("label");
-    row.className = "devig-row";
+    row.className = "devig-row devig-row-custom";
     const w0 = saved[key] != null ? String(saved[key]) : "";
-    row.innerHTML = `<input type="checkbox" data-book="${key}" ${saved[key] != null ? "checked" : ""} /><span class="devig-name">${esc(label)}</span><input type="number" class="devig-w" min="0" step="1" placeholder="%" value="${esc(w0)}" />`;
+    const dom = FAVICON[key];
+    const src = dom ? favUrl(dom) : "";
+    const logo = src
+      ? `<img class="devig-row-logo" src="${esc(src)}" alt="" width="22" height="22" loading="lazy" />`
+      : `<span class="devig-row-abbr">${esc(abbr)}</span>`;
+    row.innerHTML = `${logo}<input type="checkbox" data-book="${esc(key)}" ${saved[key] != null ? "checked" : ""} /><span class="devig-name">${esc(label)}</span><input type="number" class="devig-w" min="0" step="1" placeholder="%" value="${esc(w0)}" />`;
     grid.appendChild(row);
   }
 }
 
-document.getElementById("btnDevig")?.addEventListener("click", () => {
+function buildDevigModalGrids() {
+  ensureDevigSplitPresets();
+  buildDevigSingleGrid();
   buildDevigModalGrid();
+  applyDevigRootSelection(devigRootMemory);
+}
+
+function rememberDevigRootFromDom() {
+  const c = document.querySelector('input[name="devigRoot"]:checked');
+  if (c) devigRootMemory = c.value;
+}
+
+document.getElementById("devigDlg")?.addEventListener("click", (e) => {
+  const btn = e.target.closest?.("[data-devig-preset]");
+  if (!btn) return;
+  const p = btn.getAttribute("data-devig-preset");
+  rememberDevigRootFromDom();
+  if (p === "market") {
+    localStorage.removeItem(LS_DEVIG_W);
+    devigRootMemory = "market";
+    buildDevigSingleGrid();
+    buildDevigModalGrid();
+    applyDevigRootSelection("market");
+  } else if (p === "fd-dk-50") {
+    localStorage.setItem(LS_DEVIG_W, JSON.stringify({ fanduel: 50, draftkings: 50 }));
+    devigRootMemory = "custom";
+    buildDevigSingleGrid();
+    buildDevigModalGrid();
+    applyDevigRootSelection("custom");
+  }
+});
+
+document.getElementById("btnDevig")?.addEventListener("click", () => {
+  devigRootMemory = inferDevigRootFromSaved();
+  buildDevigModalGrids();
   document.getElementById("devigDlg")?.showModal();
 });
 
-document.getElementById("devigSearch")?.addEventListener("input", debounce(() => buildDevigModalGrid(), 200));
+document.getElementById("devigSearch")?.addEventListener(
+  "input",
+  debounce(() => {
+    rememberDevigRootFromDom();
+    buildDevigModalGrids();
+  }, 200),
+);
+
+document.getElementById("devigForm")?.addEventListener("change", (e) => {
+  const t = e.target;
+  if (t?.matches?.('input[name="devigRoot"]')) devigRootMemory = t.value;
+  if (t?.matches?.('input[type="checkbox"][data-book]')) {
+    devigRootMemory = "custom";
+    applyDevigRootSelection("custom");
+  }
+});
 
 document.getElementById("devigForm")?.addEventListener("submit", (e) => {
   e.preventDefault();
+  rememberDevigRootFromDom();
+  const root = document.querySelector('input[name="devigRoot"]:checked')?.value || "market";
   const grid = document.getElementById("devigBookGrid");
-  const weights = {};
-  if (grid) {
-    for (const lab of grid.querySelectorAll("label.devig-row")) {
-      const cb = lab.querySelector('input[type="checkbox"]');
-      const inp = lab.querySelector("input.devig-w");
-      if (!cb?.checked || !inp) continue;
-      const k = cb.getAttribute("data-book");
-      const n = Number.parseFloat(inp.value);
-      if (!k || !Number.isFinite(n) || n <= 0) continue;
-      weights[k] = n;
+  if (root === "market") {
+    localStorage.removeItem(LS_DEVIG_W);
+  } else if (root.startsWith("book:")) {
+    const k = root.slice(5);
+    if (DEVIG_BOOK_KEYS.includes(k)) localStorage.setItem(LS_DEVIG_W, JSON.stringify({ [k]: 100 }));
+  } else {
+    const weights = {};
+    if (grid) {
+      for (const lab of grid.querySelectorAll("label.devig-row-custom")) {
+        const cb = lab.querySelector('input[type="checkbox"]');
+        const inp = lab.querySelector("input.devig-w");
+        if (!cb?.checked || !inp) continue;
+        const k = cb.getAttribute("data-book");
+        const n = Number.parseFloat(inp.value);
+        if (!k || !Number.isFinite(n) || n <= 0) continue;
+        weights[k] = n;
+      }
+    }
+    if (Object.keys(weights).length) {
+      localStorage.setItem(LS_DEVIG_W, JSON.stringify(weights));
+    } else {
+      localStorage.removeItem(LS_DEVIG_W);
     }
   }
-  if (Object.keys(weights).length) {
-    localStorage.setItem(LS_DEVIG_W, JSON.stringify(weights));
-  } else {
-    localStorage.removeItem(LS_DEVIG_W);
+  try {
+    localStorage.setItem(LS_DEVIG_BOOKS, document.getElementById("devigBooks")?.value || "ALL");
+    localStorage.setItem(LS_DEVIG_SOURCE, document.getElementById("devigSource")?.value || "ALL");
+    localStorage.setItem(LS_DEVIG_METHOD, document.getElementById("devigMethod")?.value || "multiplicative");
+  } catch {
+    /* ignore */
   }
+  devigRootMemory = inferDevigRootFromSaved();
   document.getElementById("devigDlg")?.close();
   load({ nocache: true });
 });
 
 document.getElementById("devigClear")?.addEventListener("click", () => {
   localStorage.removeItem(LS_DEVIG_W);
-  buildDevigModalGrid();
+  devigRootMemory = "market";
+  buildDevigModalGrids();
+  applyDevigRootSelection("market");
   load({ nocache: true });
 });
 
@@ -628,15 +844,25 @@ document.getElementById("devigClose")?.addEventListener("click", () => {
   document.getElementById("devigDlg")?.close();
 });
 
+document.getElementById("devigCloseX")?.addEventListener("click", () => {
+  document.getElementById("devigDlg")?.close();
+});
+
+document.getElementById("devigAddCustom")?.addEventListener("click", () => {
+  devigRootMemory = "custom";
+  applyDevigRootSelection("custom");
+  document.getElementById("devigCustomWrap")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+
+document.getElementById("devigPreloads")?.addEventListener("click", () => {
+  document.getElementById("devigSplitPresets")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+
 document.getElementById("toggleBestOdds")?.addEventListener("click", () => {
   const on = localStorage.getItem(LS_HIDE_ODDS) === "1";
   localStorage.setItem(LS_HIDE_ODDS, on ? "" : "1");
   syncToggleOddsButton();
   redraw();
-});
-
-document.getElementById("devigBooks")?.addEventListener("change", () => {
-  localStorage.removeItem(LS_DEVIG_W);
 });
 
 const reloadScan = debounce(() => load(), 350);
@@ -661,4 +887,5 @@ document.getElementById("boostMode")?.addEventListener("change", () => {
 document.getElementById("boostCustomPct")?.addEventListener("input", debounce(() => redraw(), 200));
 
 syncToggleOddsButton();
+restoreDevigUiFromStorage();
 load();

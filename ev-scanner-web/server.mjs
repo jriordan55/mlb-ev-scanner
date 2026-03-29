@@ -14,7 +14,13 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { fetchBallparkPalOddsFlat, buildEvTableBpp, fetchParkFactors, attachParkFactors } from "./lib/bpp.mjs";
+import {
+  fetchBallparkPalOddsFlat,
+  buildEvTableBpp,
+  fetchParkFactors,
+  attachParkFactors,
+  canonicalBookKey,
+} from "./lib/bpp.mjs";
 import { mergeOddsScreenPrices, applyOddsScreenToEvRows } from "./lib/odds-screen.mjs";
 import {
   TARGET_BOOKS,
@@ -55,7 +61,7 @@ function normalizeDevigBooksQuery(db) {
   if (!t || t.toUpperCase() === "ALL") return "ALL";
   const parts = t
     .split(",")
-    .map((x) => x.trim())
+    .map((x) => canonicalBookKey(x.trim()))
     .filter(Boolean);
   const ok = [...new Set(parts.filter((p) => TARGET_BOOKS.includes(p)))];
   return ok.length ? ok.join(",") : "ALL";
@@ -70,7 +76,9 @@ function parseDevigWeightsQuery(raw) {
     for (const [k, v] of Object.entries(o)) {
       const n = Number(v);
       if (!Number.isFinite(n) || n <= 0) continue;
-      out[String(k).trim()] = n;
+      const ck = canonicalBookKey(String(k).trim());
+      if (!TARGET_BOOKS.includes(ck)) continue;
+      out[ck] = (out[ck] ?? 0) + n;
     }
     return Object.keys(out).length ? out : null;
   } catch {

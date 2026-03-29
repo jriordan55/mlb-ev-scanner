@@ -91,7 +91,7 @@ export function fmtAmerican(x) {
   return x > 0 ? `+${Math.round(x)}` : String(Math.round(x));
 }
 
-function canonicalBookKey(x) {
+export function canonicalBookKey(x) {
   const k = String(x ?? "")
     .toLowerCase()
     .trim();
@@ -107,8 +107,11 @@ function canonicalBookKey(x) {
   if (["novig", "novig_us", "novig_exchange", "nvg", "nv", "nvig", "no_vig", "no-vig", "no vig"].includes(k))
     return "novig";
   if (k === "bet365") return "bet365";
+  if (["pinnacle", "pinny", "pn", "pinn"].includes(k)) return "pinnacle";
+  if (["betonline", "bol", "bog"].includes(k)) return "betonline";
+  if (["hardrock", "hrk", "hardrockbet", "hard_rock"].includes(k)) return "hardrock";
   if (["betvictor", "bvd"].includes(k)) return "betvictor";
-  if (["bovada", "bv"].includes(k)) return "bovada";
+  if (["bovada"].includes(k)) return "bovada";
   if (["kalshi", "kal"].includes(k)) return "kalshi";
   if (["sharp_book_price", "sbp", "sharp"].includes(k)) return "sharp_book_price";
   if (["bookmaker", "bkm"].includes(k)) return "bookmaker";
@@ -150,27 +153,33 @@ function bppPositiveEvBookAbbrToKey(abbr) {
     NOVIG: "novig",
     BVD: "betvictor",
     BETVICTOR: "betvictor",
-    KAL: "__skip__",
-    KALSHI: "__skip__",
-    BV: "__skip__",
+    BV: "betvictor",
+    KAL: "kalshi",
+    KALSHI: "kalshi",
     BOV: "__skip__",
     BOVADA: "__skip__",
     SBP: "sharp_book_price",
     BKM: "bookmaker",
     BLY: "bally_bet",
     RIV: "betrivers",
-    SIN: "__skip__",
-    PRX: "__skip__",
+    SIN: "sin_book",
+    PRX: "prx",
     B365: "bet365",
     BET365: "bet365",
+    PN: "pinnacle",
+    PINNY: "pinnacle",
+    PINNACLE: "pinnacle",
+    BOL: "betonline",
+    BETONLINE: "betonline",
+    HR: "hardrock",
+    HRK: "hardrock",
+    HARDROCK: "hardrock",
     FLF: "__skip__",
     ONL: "__skip__",
     SH: "__skip__",
     POLY: "__skip__",
     POLYMARKET: "__skip__",
     PM: "__skip__",
-    HRK: "__skip__",
-    HARDROCK: "__skip__",
   };
   if (m[norm] === "__skip__") return null;
   if (m[norm]) return m[norm];

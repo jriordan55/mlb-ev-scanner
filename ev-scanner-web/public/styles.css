@@ -450,3 +450,215 @@ code {
   border-radius: 4px;
   font-size: 12px;
 }
+
+/* Devig modal (Ballpark Pal–style single panel) */
+.devig-dlg.modal {
+  padding: 0;
+  max-width: min(720px, 96vw);
+}
+
+.devig-dlg-form {
+  padding: 16px 18px 14px;
+}
+
+.devig-dlg-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.devig-dlg-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.devig-dlg-x {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.devig-dlg-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin: 10px 0 14px;
+}
+
+.devig-search-input {
+  flex: 1 1 200px;
+  min-width: 160px;
+  background: #0f1723;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.devig-method-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.devig-method-wrap select {
+  background: #0f1723;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-weight: 600;
+}
+
+.devig-dlg-section {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.devig-section-title {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.devig-choice-tile {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.devig-logo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 8px;
+}
+
+.devig-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  background: #0f1723;
+  min-height: 72px;
+}
+
+.devig-tile:has(input:checked) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.devig-tile input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.devig-tile-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.devig-tile-img {
+  border-radius: 6px;
+  background: #fff;
+}
+
+.devig-tile-abbr {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.devig-tile-fallback {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.devig-split-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.devig-split-btn {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.devig-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.devig-adv-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.devig-fullsel {
+  background: #0f1723;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-weight: 600;
+}
+
+label.devig-row-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 6px 0;
+}
+
+.devig-row-custom .devig-row-logo {
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: #fff;
+}
+
+.devig-row-abbr {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--muted);
+  min-width: 28px;
+}

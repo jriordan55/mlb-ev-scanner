@@ -62,6 +62,12 @@ function sendJson(res, code, obj) {
   res.end(body);
 }
 
+/** req.url includes ?query — only the path segment can be used for disk lookup. */
+function urlPathname(u) {
+  const s = String(u ?? "/").split("?")[0] || "/";
+  return s.split("#")[0] || "/";
+}
+
 function sendFile(res, filePath) {
   const ext = path.extname(filePath);
   const type = MIME[ext] ?? "application/octet-stream";
@@ -173,13 +179,14 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
 
 const server = http.createServer(async (req, res) => {
   const u = req.url ?? "/";
-  if (req.method === "OPTIONS" && u.startsWith("/api/")) {
+  const pathOnly = urlPathname(u);
+  if (req.method === "OPTIONS" && pathOnly.startsWith("/api/")) {
     res.writeHead(204, corsHeaders());
     res.end();
     return;
   }
 
-  if (u === "/api/health" || u.startsWith("/api/health?")) {
+  if (pathOnly === "/api/health") {
     sendJson(res, 200, {
       ok: true,
       service: "mlb-ev-scanner",
@@ -211,12 +218,12 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (u === "/" || u === "/index.html") {
+  if (pathOnly === "/" || pathOnly === "/index.html") {
     sendFile(res, path.join(PUBLIC, "index.html"));
     return;
   }
-  if (u.startsWith("/")) {
-    const safe = path.normalize(u).replace(/^(\.\.[\/\\])+/, "");
+  if (pathOnly.startsWith("/")) {
+    const safe = path.normalize(pathOnly).replace(/^(\.\.[\/\\])+/, "");
     const fp = path.join(PUBLIC, safe);
     if (fp.startsWith(PUBLIC) && fs.existsSync(fp) && fs.statSync(fp).isFile()) {
       sendFile(res, fp);

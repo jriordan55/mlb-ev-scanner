@@ -434,23 +434,21 @@ function render(rows, bankroll, books) {
   const frag = document.createDocumentFragment();
   for (const r of rows) {
     const tr = document.createElement("tr");
-    const effBest =
-      boostPct > 0 ? applyProfitBoostAmerican(r.best_price, boostPct) : r.best_price;
-    const evNum = calcEvPct(r.fair_prob, effBest);
+    const evNum = calcEvPct(r.fair_prob, r.best_price);
     const evc = evClass(evNum);
     let cs = "";
     if (r.cs_star != null && Number.isFinite(Number(r.cs_star))) {
       const n = Math.round(Number(r.cs_star));
       cs = n > 0 ? `+${n}` : String(n);
     }
-    const kellyRaw = formatKelly(r.fair_prob, effBest, bankroll);
+    const kellyRaw = formatKelly(r.fair_prob, r.best_price, bankroll);
     const kelly = cellDashBlank(kellyRaw);
     const bestAbbr = keyToAbbr[r.best_book_key] || "";
     const dom = FAVICON[r.best_book_key] || "";
 
-    const tp = toProbAmerican(effBest);
+    const tp = toProbAmerican(r.best_price);
     const impliedFmt = Number.isFinite(tp) ? `${(tp * 100).toFixed(1)}%` : "";
-    const bestPriceStr = cellAmerican(effBest);
+    const bestPriceStr = cellAmerican(r.best_price);
     const evStr = Number.isFinite(evNum) ? `${evNum.toFixed(2)}%` : "";
     const fairDisp = cellDashBlank(r.fair_fmt);
     const bestImg = dom
@@ -610,15 +608,6 @@ const reloadScan = debounce(() => load(), 350);
 document.getElementById("market")?.addEventListener("change", () => reloadScan());
 
 document.getElementById("bankroll")?.addEventListener("input", debounce(() => redraw(), 200));
-
-document.getElementById("boostMode")?.addEventListener("change", () => {
-  const custom = document.getElementById("boostMode")?.value === "custom";
-  const w = document.getElementById("boostCustomWrap");
-  if (w) w.hidden = !custom;
-  redraw();
-});
-
-document.getElementById("boostCustomPct")?.addEventListener("input", debounce(() => redraw(), 200));
 
 syncToggleOddsButton();
 load();

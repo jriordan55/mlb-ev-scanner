@@ -117,6 +117,7 @@ function canonicalBookKey(x) {
   if (["prx"].includes(k)) return "prx";
   if (["circa", "cir"].includes(k)) return "circa";
   if (["polymarket", "poly"].includes(k)) return "polymarket";
+  if (k === "bpp_score") return "espnbet";
   return k;
 }
 
@@ -136,7 +137,9 @@ function bppPositiveEvBookAbbrToKey(abbr) {
     TSC: "espnbet",
     THESCORE: "espnbet",
     THESCOREBET: "espnbet",
+    SCORE: "espnbet",
     SCOREBET: "espnbet",
+    TSB: "espnbet",
     ESPN: "espnbet",
     ESPNBET: "espnbet",
     NV: "novig",

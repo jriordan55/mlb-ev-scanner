@@ -146,16 +146,77 @@ export function allowedGamesByDateFromEvRows(evRows) {
   return byDate;
 }
 
-function extractSlotBooks(html) {
-  const m = html.match(/"def"\s*:\s*(\[[^\]]*\])/);
-  if (!m) return ["fanduel", "draftkings", "thescore", "novig", "caesars", "betmgm"];
-  try {
-    const arr = JSON.parse(m[1]);
-    if (!Array.isArray(arr)) return ["fanduel", "draftkings", "thescore", "novig", "caesars", "betmgm"];
-    return arr.map((x) => canonicalBookKey(String(x)));
-  } catch {
-    return ["fanduel", "draftkings", "thescore", "novig", "caesars", "betmgm"];
+/** When the EV table is empty (e.g. minBooks filter) but raw flat odds exist — still fetch Odds Screen for those games. */
+export function allowedGamesByDateFromFlat(flat) {
+  /** @type {Map<string, Set<string>>} */
+  const byDate = new Map();
+  for (const r of flat ?? []) {
+    const d = dateFromBppEventId(r.event_id);
+    if (!d) continue;
+    const game = `${r.away_team} @ ${r.home_team}`;
+    if (!byDate.has(d)) byDate.set(d, new Set());
+    byDate.get(d).add(game);
   }
+  return byDate;
+}
+
+/** Parse `"propName":[...]` arrays embedded in page JS (may contain many books; naive regex truncates early). */
+function parseJsonArrayAfterProp(html, propName) {
+  const needle = `"${propName}"`;
+  let idx = html.indexOf(needle);
+  if (idx < 0) return null;
+  const bracket = html.indexOf("[", idx + needle.length);
+  if (bracket < 0) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let j = bracket; j < html.length; j++) {
+    const c = html[j];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') {
+      inStr = true;
+      continue;
+    }
+    if (c === "[") depth++;
+    else if (c === "]") {
+      depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(html.slice(bracket, j + 1));
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+const DEFAULT_SLOT_BOOKS_FALLBACK = [
+  "draftkings",
+  "fanduel",
+  "espnbet",
+  "betmgm",
+  "caesars",
+  "novig",
+  "betvictor",
+  "circa",
+  "sharp_book_price",
+  "bookmaker",
+  "bally_bet",
+  "betrivers",
+  "bet365",
+];
+
+function extractSlotBooks(html) {
+  const arr = parseJsonArrayAfterProp(html, "def");
+  if (Array.isArray(arr) && arr.length) return arr.map((x) => canonicalBookKey(String(x)));
+  return DEFAULT_SLOT_BOOKS_FALLBACK.map((x) => canonicalBookKey(x));
 }
 
 function parseRowTds(rowHtml) {
@@ -465,22 +526,27 @@ export function applyOddsScreenToEvRows(evRows, priceMap) {
  * Recompute +EV rows to get the pre-game slate, fetch Odds-Screen for those games only, overlay prices.
  */
 export async function mergeOddsScreenPrices(flat, buildOpts) {
-  if (process.env.MLB_SCANNER_ODDS_SCREEN !== "1") {
+  if (process.env.MLB_SCANNER_ODDS_SCREEN === "0") {
     return { flat, stats: {}, priceMap: null };
   }
   if (!flat.length) return { flat, stats: {}, priceMap: null };
 
   const evProbe = buildEvTableBpp(flat, buildOpts);
   const probeRows = evProbe.rows ?? evProbe;
-  const allowed = allowedGamesByDateFromEvRows(probeRows);
+  let allowed = allowedGamesByDateFromEvRows(probeRows);
   let totalAllowedGames = 0;
   for (const s of allowed.values()) totalAllowedGames += s.size;
+  if (totalAllowedGames === 0) {
+    allowed = allowedGamesByDateFromFlat(flat);
+    totalAllowedGames = 0;
+    for (const s of allowed.values()) totalAllowedGames += s.size;
+  }
   if (totalAllowedGames === 0) {
     return {
       flat,
       priceMap: null,
       stats: {
-        odds_screen_skipped: "no_ev_table_games",
+        odds_screen_skipped: "no_games_in_scope",
       },
     };
   }

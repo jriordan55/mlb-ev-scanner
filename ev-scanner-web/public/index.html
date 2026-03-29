@@ -178,7 +178,7 @@
 
         <h3>Main table</h3>
         <ul>
-          <li><strong>Expected Value:</strong> Modeled edge versus fair, in percent, at the effective price (including any boost).</li>
+          <li><strong>Expected Value:</strong> Modeled edge versus fair, in percent, at the best posted price.</li>
           <li><strong>Kelly:</strong> Full-Kelly dollar suggestion for the stated bankroll—illustrative sizing only.</li>
           <li><strong>Best book:</strong> Operator posting the top price for that line; odds can be hidden with the header toggle.</li>
           <li><strong>Player, Line, Prop, O/U:</strong> Participant, threshold, market label, and side.</li>
@@ -189,13 +189,13 @@
           <li><strong>Matchup / park columns:</strong> Teams and Ballpark Pal combined-effect park factors.</li>
           <li>Additional columns list each book’s price for side-by-side comparison.</li>
         </ul>
-        <p>Odds are sourced from <a href="https://www.ballparkpal.com/Positive-EV.php" target="_blank" rel="noopener">Ballpark Pal Positive EV</a> (<code>UseMyBooks=0</code>). Rows require at least two books with a price on the same line (server default). Optional: <code>MLB_SCANNER_ODDS_SCREEN=1</code> overlays Odds Screen prices.</p>
+        <p>Odds combine <a href="https://www.ballparkpal.com/Positive-EV.php" target="_blank" rel="noopener">Positive EV</a> and <a href="https://www.ballparkpal.com/Odds-Screen.php" target="_blank" rel="noopener">Odds Screen</a> so each sportsbook column can fill from either page. Rows need at least two books on the same line (server default). Set <code>MLB_SCANNER_ODDS_SCREEN=0</code> to use only Positive EV.</p>
       </div>
       <button value="ok" class="top-btn">Close</button>
     </form>
   </dialog>
 
-  <script src="/app.js?v=20260333" type="module"></script>
+  <script src="/app.js?v=20260334" type="module"></script>
   <script>
     setTimeout(function () {
       var s = document.getElementById("status");

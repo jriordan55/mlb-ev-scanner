@@ -6,7 +6,7 @@
  *   MLB_SCANNER_BPP_PARALLEL=1 (both days at once; default is sequential),
  *   MLB_SCANNER_MAX_ODDS_ROWS, MLB_SCANNER_MAX_TABLE_ROWS, MLB_SCANNER_PORT,
  *   MLB_SCANNER_SKIP_PARK_FACTORS=1
- *   MLB_SCANNER_ODDS_SCREEN=1 — fetch Odds-Screen.php for all markets (allowed slate) and backfill book prices (default: off).
+ *   MLB_SCANNER_ODDS_SCREEN=0 — disable Odds-Screen.php merge (default: on; combines with Positive-EV.php for full book grid).
  *   MLB_SCANNER_OS_TIMEOUT_SEC (default 45), MLB_SCANNER_OS_DELAY_MS, MLB_SCANNER_OS_PARALLEL=1
  * GET /api/health — quick up-check. GET /api/scan?nocache=1 — bypass server cache.
  */
@@ -190,7 +190,7 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
 
   let ev;
   let booksPayload = [];
-  if (process.env.MLB_SCANNER_ODDS_SCREEN === "1") {
+  if (process.env.MLB_SCANNER_ODDS_SCREEN !== "0") {
     const os = await mergeOddsScreenPrices(flat, buildOpts);
     flat = os.flat;
     if (os.stats && Object.keys(os.stats).length) Object.assign(stats, os.stats);

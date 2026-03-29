@@ -126,6 +126,15 @@
     </form>
   </dialog>
 
-  <script src="/app.js?v=20260329" type="module"></script>
+  <script src="/app.js?v=20260330" type="module"></script>
+  <script>
+    setTimeout(function () {
+      var s = document.getElementById("status");
+      if (s && !s.getAttribute("data-ev-scan")) {
+        s.textContent =
+          "App script did not load — open DevTools (F12) → Console. Check that /app.js returns 200 (not 404). Hard-refresh: Ctrl+Shift+R.";
+      }
+    }, 6000);
+  </script>
 </body>
 </html>

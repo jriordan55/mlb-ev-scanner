@@ -119,6 +119,12 @@ let lastData = null;
 let loadSeq = 0;
 let scanAbort = null;
 
+/** Proves the module executed; index.html uses this to detect script 404 / parse errors. */
+document.getElementById("status")?.setAttribute("data-ev-scan", "booted");
+
+/** Client wait for /api/scan (server can take minutes: 2× huge BPP HTML + Odds Screen). */
+const SCAN_FETCH_TIMEOUT_MS = 240_000;
+
 /** API lives on the Node server; opening index.html via file:// breaks relative /api/scan. */
 function apiOrigin() {
   const meta = document.querySelector('meta[name="api-origin"]')?.getAttribute("content")?.trim();
@@ -163,16 +169,32 @@ function getBankroll() {
 
 async function load(opts = {}) {
   const status = document.getElementById("status");
+  if (!status) return;
   const seq = ++loadSeq;
   scanAbort?.abort();
   scanAbort = new AbortController();
   const { signal } = scanAbort;
+
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    scanAbort.abort();
+  }, SCAN_FETCH_TIMEOUT_MS);
+
+  const t0 = Date.now();
+  const tick = setInterval(() => {
+    if (seq !== loadSeq) return;
+    const sec = Math.round((Date.now() - t0) / 1000);
+    status.textContent = `Loading odds… ${sec}s · server is fetching Ballpark Pal (large pages) and may run Odds Screen — often 30s–3m; Render free tier can cold-start too`;
+  }, 2000);
 
   if (window.location.protocol === "file:") {
     status.textContent = `Loading via API ${apiOrigin() || "(same host)"}… If this fails, open http://127.0.0.1:3847 after npm start (recommended). First load 30–120s.`;
   } else {
     status.textContent = "Loading odds… (Ballpark Pal pages are large; first load can take 30–120s)";
   }
+
+  const tbErr = document.getElementById("tbody");
   try {
     const r = await fetch(scanUrl(opts), { cache: "no-store", signal });
     const raw = await r.text();
@@ -204,11 +226,23 @@ async function load(opts = {}) {
         " — Raw odds loaded but EV table is empty. Set env MLB_SCANNER_MIN_BOOKS_SAME_LINE=1 on the server and redeploy, or widen book coverage.";
     }
   } catch (e) {
-    if (e?.name === "AbortError") return;
     if (seq !== loadSeq) return;
-    status.textContent = `Error: ${e.message} — Is the server running (npm start)? Try ${apiOrigin() || ""}/api/health`;
-    const tbErr = document.getElementById("tbody");
+    if (e?.name === "AbortError") {
+      if (timedOut) {
+        status.textContent = `Timed out after ${SCAN_FETCH_TIMEOUT_MS / 1000}s waiting for /api/scan. The server may still be working (see host logs). Try: refresh, add ?skipPf=1, or set MLB_SCANNER_BPP_FETCH_DAYS=1 on the server for a faster scan.`;
+        if (tbErr) tbErr.innerHTML = "";
+      }
+      return;
+    }
+    const netHint =
+      e?.message === "Failed to fetch"
+        ? " Often: host proxy timeout (~100s on Render), server crash, or wrong API URL (set meta api-origin if UI is on another domain)."
+        : "";
+    status.textContent = `Error: ${e.message}${netHint} — Try ${apiOrigin() || window.location.origin || ""}/api/health`;
     if (tbErr) tbErr.innerHTML = "";
+  } finally {
+    clearInterval(tick);
+    clearTimeout(timeoutId);
   }
 }
 

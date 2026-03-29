@@ -76,7 +76,12 @@ function parseDevigWeightsQuery(raw) {
     for (const [k, v] of Object.entries(o)) {
       const n = Number(v);
       if (!Number.isFinite(n) || n <= 0) continue;
-      const ck = canonicalBookKey(String(k).trim());
+      const rawK = String(k).trim();
+      const ck = canonicalBookKey(rawK);
+      if (rawK === "ballpark_pal" || ck === "ballpark_pal" || rawK === "__bp_model__" || ck === "__bp_model__") {
+        out.__bp_model__ = (out.__bp_model__ ?? 0) + n;
+        continue;
+      }
       if (!TARGET_BOOKS.includes(ck)) continue;
       out[ck] = (out[ck] ?? 0) + n;
     }
@@ -312,7 +317,7 @@ const server = http.createServer(async (req, res) => {
       if (!ALLOW_DEVIG_METHOD.has(dm)) dm = "multiplicative";
       let db = normalizeDevigBooksQuery(params.get("devigBooks") || "ALL");
       let ds = params.get("devigSource") || "ALL";
-      if (ds !== "ALL" && !TARGET_BOOKS.includes(ds)) ds = "ALL";
+      if (ds !== "ALL" && (!TARGET_BOOKS.includes(ds) || ds === "ballpark_pal")) ds = "ALL";
       let bmk = params.get("market") || "All";
       if (bmk !== "All" && (!BPP_MARKET_KEY_TO_BET_ID[bmk] || EXCLUDED_BPP_MARKET_KEYS.has(bmk))) bmk = "All";
       const dw = parseDevigWeightsQuery(params.get("devigWeights"));

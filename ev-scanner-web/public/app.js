@@ -3,88 +3,90 @@ const FAVICON = {
   fanduel: "fanduel.com",
   pinnacle: "pinnacle.com",
   circa: "circasports.com",
-  espnbet: "espnbet.com",
+  espnbet: "thescore.com",
   betmgm: "betmgm.com",
   betonline: "betonline.ag",
   bet365: "bet365.com",
   betvictor: "betvictor.com",
   novig: "novig.com",
   caesars: "caesars.com",
+  bovada: "bovada.lv",
   sharp_book_price: "sportsbookreview.com",
   bookmaker: "bookmaker.eu",
   bally_bet: "ballybet.com",
   betrivers: "betrivers.com",
-  hardrock: "hardrock.bet",
   kalshi: "kalshi.com",
   sin_book: "si.com",
-  prx: "prophetx.com",
+  ballpark_pal: "ballparkpal.com",
 };
 
-/** Keys listed in Devig modal (aligned with server TARGET_BOOKS). */
+/** Sportsbook keys for fair-from source (no model-only pseudo-book). */
 const DEVIG_BOOK_KEYS = [
   "draftkings",
   "fanduel",
   "pinnacle",
   "circa",
   "espnbet",
-  "hardrock",
   "betmgm",
   "betonline",
   "bet365",
   "betvictor",
   "novig",
   "caesars",
+  "bovada",
   "sharp_book_price",
   "bookmaker",
   "bally_bet",
   "betrivers",
   "kalshi",
   "sin_book",
-  "prx",
 ];
+
+/** Weights + two-way list: sportsbooks plus Ballpark Pal model. */
+const DEVIG_WEIGHT_KEYS = [...DEVIG_BOOK_KEYS, "ballpark_pal"];
 
 const DEVIG_LABEL = {
   draftkings: "DraftKings",
   fanduel: "FanDuel",
   pinnacle: "Pinnacle",
   circa: "Circa",
-  espnbet: "ESPN Bet",
-  hardrock: "Hard Rock Bet",
+  espnbet: "theScore",
   betmgm: "BetMGM",
   betonline: "BetOnline",
   bet365: "Bet365",
   betvictor: "BetVictor",
   novig: "Novig",
   caesars: "Caesars",
+  bovada: "Bovada",
   sharp_book_price: "Sharp Book Price",
   bookmaker: "BookMaker",
   bally_bet: "Bally Bet",
   betrivers: "Bet Rivers",
   kalshi: "Kalshi",
   sin_book: "SI Sportsbook",
-  prx: "ProphetX",
+  ballpark_pal: "Ballpark Pal (model)",
 };
 
 const BOOK_TILE_ABBR = {
   draftkings: "DK",
   fanduel: "FD",
   pinnacle: "PN",
-  circa: "Circa",
-  espnbet: "ESPN",
-  hardrock: "HR",
+  circa: "CIR",
+  espnbet: "TS",
   betmgm: "MGM",
   betonline: "BOL",
   bet365: "B365",
   betvictor: "BV",
   novig: "NVG",
   caesars: "CZR",
+  bovada: "BOV",
   sharp_book_price: "SBP",
   bookmaker: "BKM",
   bally_bet: "BLY",
   betrivers: "RIV",
   kalshi: "KAL",
   sin_book: "SIN",
-  prx: "PRX",
+  ballpark_pal: "BP",
 };
 
 const LS_DEVIG_W = "ev_devig_weights";
@@ -231,6 +233,9 @@ let lastData = null;
 let loadSeq = 0;
 let scanAbort = null;
 
+/** Client-side column sort (thead); stable tie-break by original index. */
+let sortState = { key: "ev", dir: "desc" };
+
 /** Proves the module executed; index.html uses this to detect script 404 / parse errors. */
 document.getElementById("status")?.setAttribute("data-ev-scan", "booted");
 
@@ -251,10 +256,11 @@ function getSavedDevigWeights() {
     if (!s) return null;
     const o = JSON.parse(s);
     if (!o || typeof o !== "object" || Array.isArray(o)) return null;
-    const allowed = new Set(DEVIG_BOOK_KEYS);
+    const allowed = new Set(DEVIG_WEIGHT_KEYS);
     const out = {};
     for (const [k, v] of Object.entries(o)) {
-      const key = String(k).trim();
+      let key = String(k).trim();
+      if (key === "__bp_model__") key = "ballpark_pal";
       if (!allowed.has(key)) continue;
       const n = Number(v);
       if (!Number.isFinite(n) || n <= 0) continue;
@@ -269,13 +275,14 @@ function getSavedDevigWeights() {
 function fillDevigBookSelect(selId) {
   const sel = document.getElementById(selId);
   if (!sel) return;
+  const keys = selId === "devigSource" ? DEVIG_BOOK_KEYS : DEVIG_WEIGHT_KEYS;
   const prev = sel.value;
   sel.innerHTML = "";
   const all = document.createElement("option");
   all.value = "ALL";
   all.textContent = "All books";
   sel.appendChild(all);
-  for (const k of DEVIG_BOOK_KEYS) {
+  for (const k of keys) {
     const o = document.createElement("option");
     o.value = k;
     o.textContent = DEVIG_LABEL[k] || k;
@@ -359,6 +366,23 @@ function scanUrl(opts = {}) {
   return o ? `${o}${path}` : path;
 }
 
+function getImpliedPctFilterBounds() {
+  const minEl = document.getElementById("oddsImpMin");
+  const maxEl = document.getElementById("oddsImpMax");
+  const rawMin = String(minEl?.value ?? "").trim();
+  const rawMax = String(maxEl?.value ?? "").trim();
+  let lo = rawMin === "" ? NaN : Number.parseFloat(rawMin);
+  let hi = rawMax === "" ? NaN : Number.parseFloat(rawMax);
+  if (!Number.isFinite(lo)) lo = NaN;
+  if (!Number.isFinite(hi)) hi = NaN;
+  if (Number.isFinite(lo) && Number.isFinite(hi) && lo > hi) {
+    const t = lo;
+    lo = hi;
+    hi = t;
+  }
+  return { lo, hi };
+}
+
 function applyFilters(rows) {
   if (!rows?.length) return [];
   const g = (id) => document.getElementById(id);
@@ -372,7 +396,143 @@ function applyFilters(rows) {
   else if (ou === "Unders") out = out.filter((r) => r.side === "under");
   const bb = g("bestBook")?.value;
   if (bb && bb !== "All") out = out.filter((r) => r.best_book_key === bb);
+
+  const boostPct = resolveBoostProfitPct(g("boostMode")?.value, g("boostCustomPct")?.value);
+  const { lo, hi } = getImpliedPctFilterBounds();
+  if (Number.isFinite(lo) || Number.isFinite(hi)) {
+    out = out.filter((r) => {
+      const eff =
+        boostPct > 0 ? applyProfitBoostAmerican(r.best_price, boostPct) : r.best_price;
+      const imp = toProbAmerican(eff) * 100;
+      if (!Number.isFinite(imp)) return false;
+      if (Number.isFinite(lo) && imp < lo) return false;
+      if (Number.isFinite(hi) && imp > hi) return false;
+      return true;
+    });
+  }
   return out;
+}
+
+function sortKindNum(n) {
+  return { kind: "num", n };
+}
+
+function sortKindStr(s) {
+  return { kind: "str", s: s == null ? "" : String(s) };
+}
+
+function compareSortVals(va, vb) {
+  if (va.kind === "num" && vb.kind === "num") {
+    const na = va.n;
+    const nb = vb.n;
+    if (!Number.isFinite(na) && !Number.isFinite(nb)) return 0;
+    if (!Number.isFinite(na)) return 1;
+    if (!Number.isFinite(nb)) return -1;
+    return na < nb ? -1 : na > nb ? 1 : 0;
+  }
+  return String(va.s ?? "").localeCompare(String(vb.s ?? ""), undefined, { numeric: true, sensitivity: "base" });
+}
+
+function bppSortVal(raw) {
+  const n = parseFloat(String(raw ?? "").replace(/[^0-9.-]/g, ""));
+  return sortKindNum(Number.isFinite(n) ? n : NaN);
+}
+
+function sortExtract(r, sortKey, ctx) {
+  const boostPct = ctx.boostPct;
+  const bankroll = ctx.bankroll;
+  const effBest =
+    boostPct > 0 ? applyProfitBoostAmerican(r.best_price, boostPct) : r.best_price;
+
+  switch (sortKey) {
+    case "ev":
+      return sortKindNum(calcEvPct(r.fair_prob, effBest));
+    case "kelly":
+      return sortKindNum(kellyBetDollars(r.fair_prob, effBest, bankroll));
+    case "best":
+      return sortKindStr(r.best_book_key ?? "");
+    case "player":
+      return sortKindStr(r.player ?? "");
+    case "line":
+      return sortKindStr(r.line ?? "");
+    case "fair":
+      return sortKindNum(Number(r.fair_odds));
+    case "cs":
+      return sortKindNum(r.cs_star == null ? NaN : Number(r.cs_star));
+    case "implied":
+      return sortKindNum(toProbAmerican(effBest) * 100);
+    case "delta":
+      return sortKindNum(
+        r.delta_prob_consensus_vig == null ? NaN : Number(r.delta_prob_consensus_vig),
+      );
+    case "market":
+      return sortKindStr(r.market_label ?? "");
+    case "side": {
+      const s = String(r.side ?? "").toLowerCase();
+      const o = s === "over" ? 0 : s === "under" ? 1 : 2;
+      return sortKindNum(o);
+    }
+    case "matchup":
+      return sortKindStr(r.game ?? "");
+    case "bpp_hr":
+      return bppSortVal(r.bpp_hr);
+    case "bpp_2b3b":
+      return bppSortVal(r.bpp_2b3b);
+    case "bpp_1b":
+      return bppSortVal(r.bpp_1b);
+    case "bpp_runs":
+      return bppSortVal(r.bpp_runs);
+    case "bp_model":
+      return sortKindNum(r.bp_price == null ? NaN : Number(r.bp_price));
+    default:
+      if (sortKey.startsWith("book:")) {
+        const bk = sortKey.slice(5);
+        const abbr = ctx.bookKeyToAbbr?.[bk];
+        const raw = abbr != null ? r.books?.[abbr] : NaN;
+        return sortKindNum(Number(raw));
+      }
+      return sortKindStr("");
+  }
+}
+
+function sortRows(rows, sortKey, dir, ctx) {
+  if (!rows?.length || !sortKey) return rows ?? [];
+  const ix = rows.map((r, i) => ({ r, i }));
+  ix.sort((A, B) => {
+    const va = sortExtract(A.r, sortKey, ctx);
+    const vb = sortExtract(B.r, sortKey, ctx);
+    let c = compareSortVals(va, vb);
+    if (c !== 0) return dir === "asc" ? c : -c;
+    return A.i - B.i;
+  });
+  return ix.map((x) => x.r);
+}
+
+function syncSortHeaderClasses() {
+  document.querySelectorAll("#grid thead th[data-sort]").forEach((th) => {
+    th.classList.remove("sort-asc", "sort-desc", "sort-active");
+    if (th.dataset.sort === sortState.key) {
+      th.classList.add("sort-active", sortState.dir === "asc" ? "sort-asc" : "sort-desc");
+    }
+  });
+}
+
+function defaultSortDirForKey(key) {
+  if (key.startsWith("book:")) return "desc";
+  const descDefaults = new Set([
+    "ev",
+    "kelly",
+    "fair",
+    "cs",
+    "implied",
+    "delta",
+    "bp_model",
+    "bpp_hr",
+    "bpp_2b3b",
+    "bpp_1b",
+    "bpp_runs",
+  ]);
+  return descDefaults.has(key) ? "desc" : "asc";
 }
 
 function getBankroll() {
@@ -460,9 +620,20 @@ async function load(opts = {}) {
 
 function redraw() {
   if (!lastData) return;
-  const rows = applyFilters(lastData.rows);
+  const filtered = applyFilters(lastData.rows);
   const br = getBankroll();
-  render(rows, br, lastData.books || []);
+  const boostPct = resolveBoostProfitPct(
+    document.getElementById("boostMode")?.value,
+    document.getElementById("boostCustomPct")?.value,
+  );
+  const bookKeyToAbbr = Object.fromEntries((lastData.books || []).map((b) => [b.key, b.abbr]));
+  const sorted = sortRows(filtered, sortState.key, sortState.dir, {
+    boostPct,
+    bankroll: br,
+    bookKeyToAbbr,
+  });
+  render(sorted, br, lastData.books || []);
+  syncSortHeaderClasses();
 }
 
 function fillFilters(data) {
@@ -527,13 +698,15 @@ function fillFilters(data) {
       thead.removeChild(thead.lastChild);
     }
     const bpTh = document.createElement("th");
-    bpTh.className = "book-head bp-head";
+    bpTh.className = "book-head bp-head sortable";
+    bpTh.dataset.sort = "bp_model";
     bpTh.title = "Ballpark Pal model — used in fair / devig; not bettable";
     bpTh.innerHTML = `<span class="bh bh-logo-only"><img src="${esc(favUrl(BP_FAV_DOMAIN))}" alt="" width="20" height="20"/></span>`;
     thead.appendChild(bpTh);
     for (const b of data.books || []) {
       const th = document.createElement("th");
-      th.className = "book-head";
+      th.className = "book-head sortable";
+      th.dataset.sort = `book:${b.key}`;
       th.title = b.label ?? b.abbr;
       const dom = FAVICON[b.key];
       const img = dom
@@ -697,7 +870,7 @@ function buildDevigSingleGrid() {
   if (!grid) return;
   const q = (document.getElementById("devigSearch")?.value || "").toLowerCase().trim();
   grid.innerHTML = "";
-  for (const key of DEVIG_BOOK_KEYS) {
+  for (const key of DEVIG_WEIGHT_KEYS) {
     const label = DEVIG_LABEL[key] || key;
     const abbr = BOOK_TILE_ABBR[key] || key.slice(0, 4).toUpperCase();
     if (q && !label.toLowerCase().includes(q) && !key.includes(q) && !String(abbr).toLowerCase().includes(q)) continue;
@@ -719,7 +892,7 @@ function buildDevigModalGrid() {
   const saved = getSavedDevigWeights() || {};
   const q = (document.getElementById("devigSearch")?.value || "").toLowerCase().trim();
   grid.innerHTML = "";
-  for (const key of DEVIG_BOOK_KEYS) {
+  for (const key of DEVIG_WEIGHT_KEYS) {
     const label = DEVIG_LABEL[key] || key;
     const abbr = BOOK_TILE_ABBR[key] || key;
     if (q && !label.toLowerCase().includes(q) && !key.includes(q) && !String(abbr).toLowerCase().includes(q)) continue;
@@ -800,7 +973,7 @@ document.getElementById("devigForm")?.addEventListener("submit", (e) => {
     localStorage.removeItem(LS_DEVIG_W);
   } else if (root.startsWith("book:")) {
     const k = root.slice(5);
-    if (DEVIG_BOOK_KEYS.includes(k)) localStorage.setItem(LS_DEVIG_W, JSON.stringify({ [k]: 100 }));
+    if (DEVIG_WEIGHT_KEYS.includes(k)) localStorage.setItem(LS_DEVIG_W, JSON.stringify({ [k]: 100 }));
   } else {
     const weights = {};
     if (grid) {
@@ -886,6 +1059,25 @@ document.getElementById("boostMode")?.addEventListener("change", () => {
 
 document.getElementById("boostCustomPct")?.addEventListener("input", debounce(() => redraw(), 200));
 
+document.getElementById("oddsImpMin")?.addEventListener("input", debounce(() => redraw(), 200));
+document.getElementById("oddsImpMax")?.addEventListener("input", debounce(() => redraw(), 200));
+
 syncToggleOddsButton();
 restoreDevigUiFromStorage();
+
+document.querySelector("#grid thead")?.addEventListener("click", (e) => {
+  if (e.target.closest("button")) return;
+  const th = e.target.closest("th[data-sort]");
+  if (!th) return;
+  const key = th.dataset.sort;
+  if (!key) return;
+  if (sortState.key === key) {
+    sortState.dir = sortState.dir === "asc" ? "desc" : "asc";
+  } else {
+    sortState.key = key;
+    sortState.dir = defaultSortDirForKey(key);
+  }
+  redraw();
+});
+
 load();

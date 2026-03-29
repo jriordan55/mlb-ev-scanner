@@ -57,8 +57,8 @@ function canonicalBookKey(x) {
   if (k === "bet365") return "bet365";
   if (["pinnacle", "pinny", "pn", "pinn"].includes(k)) return "pinnacle";
   if (["betonline", "bol", "bog"].includes(k)) return "betonline";
-  if (["hardrock", "hrk", "hardrockbet", "hard_rock"].includes(k)) return "hardrock";
   if (["betvictor", "bvd"].includes(k)) return "betvictor";
+  if (["bovada", "bv"].includes(k)) return "bovada";
   if (["sharp_book_price", "sbp"].includes(k)) return "sharp_book_price";
   if (["bookmaker", "bkm"].includes(k)) return "bookmaker";
   if (["bally_bet", "bly"].includes(k)) return "bally_bet";
@@ -66,8 +66,7 @@ function canonicalBookKey(x) {
   if (["circa", "cir"].includes(k)) return "circa";
   if (["kalshi", "kal"].includes(k)) return "kalshi";
   if (["sin_book", "sin"].includes(k)) return "sin_book";
-  if (["prx"].includes(k)) return "prx";
-  if (["bovada", "bv"].includes(k)) return "bpp_skip";
+  if (["prx", "hardrock", "hrk", "hardrockbet", "hard_rock"].includes(k)) return "bpp_skip";
   if (
     ["polymarket", "poly", "flf", "onl", "sh", "bpp_poly", "bpp_flf", "bpp_onl", "bpp_sh"].includes(k) ||
     SKIPPED_BOOK_KEYS.has(k)

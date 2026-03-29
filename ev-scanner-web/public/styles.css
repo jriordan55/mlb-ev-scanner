@@ -88,6 +88,28 @@ body {
   min-width: 72px;
 }
 
+.pill-odds-range {
+  min-width: 148px;
+}
+
+.pill-row-inline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pill-row-inline input {
+  flex: 1;
+  min-width: 0;
+  width: 56px;
+}
+
+.pill-dash {
+  color: var(--muted);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
 .pill select,
 .pill input {
   background: #0f1723;
@@ -137,6 +159,32 @@ body {
   background: #1c2533;
   color: #d7e7ff;
   font-weight: 700;
+}
+
+.ev-grid thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.ev-grid thead th.sortable:hover {
+  color: #fff;
+}
+
+.ev-grid thead th.sort-active.sort-asc::after,
+.ev-grid thead th.sort-active.sort-desc::after {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.65em;
+  opacity: 0.85;
+  vertical-align: middle;
+}
+
+.ev-grid thead th.sort-active.sort-asc::after {
+  content: "▲";
+}
+
+.ev-grid thead th.sort-active.sort-desc::after {
+  content: "▼";
 }
 
 /* Frozen left columns (EV → Player); horizontal scroll for book grid */

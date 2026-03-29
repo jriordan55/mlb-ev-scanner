@@ -34,6 +34,14 @@
     <label class="pill">Game
       <select id="game"></select>
     </label>
+    <label class="pill pill-odds-range" title="Filter by implied win probability at the best price (after boost). Higher % = shorter odds / more “certain” from the book’s view. Leave blank for no limit.">
+      Implied % (best)
+      <span class="pill-row-inline">
+        <input type="number" id="oddsImpMin" placeholder="Min" min="0" max="100" step="0.1" />
+        <span class="pill-dash" aria-hidden="true">–</span>
+        <input type="number" id="oddsImpMax" placeholder="Max" min="0" max="100" step="0.1" />
+      </span>
+    </label>
     <label class="pill">Bankroll ($)
       <input type="number" id="bankroll" value="1000" min="0" step="50" />
     </label>
@@ -60,22 +68,22 @@
     <table class="ev-grid" id="grid">
       <thead>
         <tr>
-          <th class="col-pin col-pin-1">EV %</th>
-          <th class="col-pin col-pin-2">Kelly</th>
-          <th class="col-pin col-pin-3">Best book<br /><button type="button" class="th-mini" id="toggleBestOdds" title="Show or hide American odds next to the book logo">− Hide odds</button></th>
-          <th class="col-pin col-pin-4">Player</th>
-          <th>Line</th>
-          <th>Fair</th>
-          <th>CS*</th>
-          <th>Implied</th>
-          <th title="Probability delta: outlier book vs market consensus (with vig)">Δ (vig)</th>
-          <th>Prop</th>
-          <th>O/U</th>
-          <th>Matchup</th>
-          <th>HR</th>
-          <th>2B/3B</th>
-          <th>1B</th>
-          <th>Runs</th>
+          <th class="col-pin col-pin-1 sortable" data-sort="ev" title="Click to sort">EV %</th>
+          <th class="col-pin col-pin-2 sortable" data-sort="kelly" title="Click to sort">Kelly</th>
+          <th class="col-pin col-pin-3 sortable" data-sort="best" title="Click to sort (not the odds toggle)">Best book<br /><button type="button" class="th-mini" id="toggleBestOdds" title="Show or hide American odds next to the book logo">− Hide odds</button></th>
+          <th class="col-pin col-pin-4 sortable" data-sort="player" title="Click to sort">Player</th>
+          <th class="sortable" data-sort="line" title="Click to sort">Line</th>
+          <th class="sortable" data-sort="fair" title="Click to sort">Fair</th>
+          <th class="sortable" data-sort="cs" title="Click to sort">CS*</th>
+          <th class="sortable" data-sort="implied" title="Click to sort">Implied</th>
+          <th class="sortable" data-sort="delta" title="The probability delta between the outlier book and the market consensus (with vig).">Δ</th>
+          <th class="sortable" data-sort="market" title="Click to sort">Prop</th>
+          <th class="sortable" data-sort="side" title="Click to sort">O/U</th>
+          <th class="sortable" data-sort="matchup" title="Click to sort">Matchup</th>
+          <th class="sortable" data-sort="bpp_hr" title="Click to sort">HR</th>
+          <th class="sortable" data-sort="bpp_2b3b" title="Click to sort">2B/3B</th>
+          <th class="sortable" data-sort="bpp_1b" title="Click to sort">1B</th>
+          <th class="sortable" data-sort="bpp_runs" title="Click to sort">Runs</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
@@ -203,7 +211,7 @@
           <li><strong>Fair:</strong> Fair American odds after devig; excludes promotions.</li>
           <li><strong>CS*:</strong> Ballpark Pal consensus (American odds) from the source page.</li>
           <li><strong>Implied:</strong> Win probability implied by the price used for that row, after boost if applicable.</li>
-          <li><strong>Δ (vig):</strong> Probability delta between the outlier book and the market consensus (with vig), when present on the Ballpark Pal table.</li>
+          <li><strong>Δ:</strong> The probability delta between the outlier book and the market consensus (with vig), when present on the Ballpark Pal table.</li>
           <li><strong>Matchup / park columns:</strong> Teams and Ballpark Pal combined-effect park factors.</li>
           <li>Additional columns list each book’s price for side-by-side comparison.</li>
         </ul>
@@ -213,7 +221,7 @@
     </form>
   </dialog>
 
-  <script src="/app.js?v=20260337" type="module"></script>
+  <script src="/app.js?v=20260339" type="module"></script>
   <script>
     setTimeout(function () {
       var s = document.getElementById("status");

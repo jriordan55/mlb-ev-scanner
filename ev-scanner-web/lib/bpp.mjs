@@ -107,9 +107,10 @@ export function canonicalBookKey(x) {
   if (["novig", "novig_us", "novig_exchange", "nvg", "nv", "nvig", "no_vig", "no-vig", "no vig"].includes(k))
     return "novig";
   if (k === "bet365") return "bet365";
+  if (k === "ballpark_pal") return "ballpark_pal";
+  if (k === "__bp_model__") return "__bp_model__";
   if (["pinnacle", "pinny", "pn", "pinn"].includes(k)) return "pinnacle";
   if (["betonline", "bol", "bog"].includes(k)) return "betonline";
-  if (["hardrock", "hrk", "hardrockbet", "hard_rock"].includes(k)) return "hardrock";
   if (["betvictor", "bvd"].includes(k)) return "betvictor";
   if (["bovada"].includes(k)) return "bovada";
   if (["kalshi", "kal"].includes(k)) return "kalshi";
@@ -118,7 +119,6 @@ export function canonicalBookKey(x) {
   if (["bally_bet", "bly", "bally"].includes(k)) return "bally_bet";
   if (["betrivers", "riv", "bet_rivers"].includes(k)) return "betrivers";
   if (["sin_book", "sin"].includes(k)) return "sin_book";
-  if (["prx"].includes(k)) return "prx";
   if (["circa", "cir"].includes(k)) return "circa";
   if (["polymarket", "poly"].includes(k)) return "polymarket";
   if (k === "bpp_score") return "espnbet";
@@ -156,14 +156,14 @@ function bppPositiveEvBookAbbrToKey(abbr) {
     BV: "betvictor",
     KAL: "kalshi",
     KALSHI: "kalshi",
-    BOV: "__skip__",
-    BOVADA: "__skip__",
+    BOV: "bovada",
+    BOVADA: "bovada",
     SBP: "sharp_book_price",
     BKM: "bookmaker",
     BLY: "bally_bet",
     RIV: "betrivers",
     SIN: "sin_book",
-    PRX: "prx",
+    PRX: "__skip__",
     B365: "bet365",
     BET365: "bet365",
     PN: "pinnacle",
@@ -171,9 +171,9 @@ function bppPositiveEvBookAbbrToKey(abbr) {
     PINNACLE: "pinnacle",
     BOL: "betonline",
     BETONLINE: "betonline",
-    HR: "hardrock",
-    HRK: "hardrock",
-    HARDROCK: "hardrock",
+    HR: "__skip__",
+    HRK: "__skip__",
+    HARDROCK: "__skip__",
     FLF: "__skip__",
     ONL: "__skip__",
     SH: "__skip__",
@@ -566,7 +566,9 @@ export function buildEvTableBpp(rows, opts = {}) {
     for (const [bk, w0] of Object.entries(dwRaw)) {
       const w = Number(w0);
       if (!Number.isFinite(w) || w <= 0) continue;
-      const ck = canonicalBookKey(bk);
+      const raw = String(bk).trim();
+      const ck =
+        raw === "ballpark_pal" || raw === "__bp_model__" ? "__bp_model__" : canonicalBookKey(bk);
       acc[ck] = (acc[ck] ?? 0) + w;
       sum += w;
     }
@@ -596,6 +598,17 @@ export function buildEvTableBpp(rows, opts = {}) {
     abbr: bookColAbbr(k),
   }));
 
+  /** BP model over/under American prices per prop (for ballpark_pal two-way devig). */
+  const bpByPropEarly = new Map();
+  for (const r of d) {
+    const pk = [r.event_id, r.market, r.player, r.line_key].join("\t");
+    if (!bpByPropEarly.has(pk)) bpByPropEarly.set(pk, {});
+    const sd = r.side;
+    if ((sd === "over" || sd === "under") && r.bp_price != null && Number.isFinite(Number(r.bp_price))) {
+      bpByPropEarly.get(pk)[sd] = Number(r.bp_price);
+    }
+  }
+
   let devigBooksList;
   const dbRaw = String(opts.devigBooks ?? "ALL").trim();
   if (dbRaw.toUpperCase() !== "ALL") {
@@ -603,7 +616,7 @@ export function buildEvTableBpp(rows, opts = {}) {
       .split(",")
       .map((x) => canonicalBookKey(x.trim()))
       .filter(Boolean)
-      .filter((x) => keysInData.includes(x));
+      .filter((x) => keysInData.includes(x) || x === "ballpark_pal");
     if (parts.length > 0) devigBooksList = parts;
     else devigBooksList = keysInData.length > 0 ? keysInData : [...TARGET_BOOKS];
   } else {
@@ -629,10 +642,33 @@ export function buildEvTableBpp(rows, opts = {}) {
     if (r.side === "under") o.under = r;
   }
 
+  if (devigBooksList.includes("ballpark_pal")) {
+    const seenPk = new Set();
+    for (const r of withFair) {
+      const pk = [r.event_id, r.market, r.player, r.line_key].join("\t");
+      if (seenPk.has(pk)) continue;
+      seenPk.add(pk);
+      const bo = bpByPropEarly.get(pk);
+      if (!Number.isFinite(bo?.over) || !Number.isFinite(bo?.under)) continue;
+      const bk = [r.event_id, r.market, r.player, r.line_key, "ballpark_pal"].join("\t");
+      pairMap.set(bk, {
+        over: { implied: toProb(bo.over), side: "over" },
+        under: { implied: toProb(bo.under), side: "under" },
+      });
+    }
+  }
+
   withFair = withFair.map((r) => {
-    if (!devigBooksList.includes(r.bookmaker_key)) return r;
-    const bk = [r.event_id, r.market, r.player, r.line_key, r.bookmaker_key].join("\t");
-    const o = pairMap.get(bk);
+    const bpBk = [r.event_id, r.market, r.player, r.line_key, "ballpark_pal"].join("\t");
+    let o = null;
+    if (devigBooksList.includes("ballpark_pal")) {
+      o = pairMap.get(bpBk);
+    }
+    if (!o?.over || !o?.under) {
+      if (!devigBooksList.includes(r.bookmaker_key)) return r;
+      const bk = [r.event_id, r.market, r.player, r.line_key, r.bookmaker_key].join("\t");
+      o = pairMap.get(bk);
+    }
     if (!o?.over || !o?.under) return r;
     let m = devigMethod;
     if (r.market === "batter_home_runs") m = "multiplicative";

@@ -102,6 +102,7 @@
           <th>CS*</th>
           <th>Impl</th>
           <th>Odds</th>
+          <th title="Ballpark Pal model line (American odds)">BP</th>
           <th>Prop</th>
           <th>O/U</th>
           <th>Matchup</th>
@@ -118,7 +119,7 @@
   <dialog id="helpDlg" class="modal">
     <form method="dialog">
       <h2>How this works</h2>
-      <p>This page loads Ballpark Pal’s Positive EV board on the server, builds +EV rows (BPP “Win %” when present, else implied; two-way devig when both O and U exist from the books you pick), and renders a plain HTML table.</p>
+      <p>This page loads Ballpark Pal’s Positive EV board on the server, builds +EV rows (BPP “Win %” when present, else implied; two-way devig when both O and U exist from the books you pick), and renders a plain HTML table. For games that still appear on that +EV board, <strong>sportsbook prices and BP</strong> are refreshed from Ballpark Pal’s <strong>Odds Screen</strong> (today and tomorrow, per market and O/U). Set <code>MLB_SCANNER_ODDS_SCREEN=0</code> on the server to skip that step.</p>
       <p><strong>Devig by</strong> limits which sportsbooks are used to build over/under fair prices. <strong>Fair from</strong> sets which books feed the consensus fair line. <strong>Boost</strong> adjusts EV, implied, Kelly, and best odds only—fair value stays the market benchmark.</p>
       <p><strong>Fast tips:</strong> Park factors are an extra HTTP request; add <code>?skipPf=1</code> to the URL or set <code>MLB_SCANNER_SKIP_PARK_FACTORS=1</code> on the server for a quicker first paint.</p>
       <button value="ok" class="top-btn">Close</button>

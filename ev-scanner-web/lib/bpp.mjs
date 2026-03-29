@@ -273,6 +273,12 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
     const pr = parseAmericanNum(htmlText(cells[6]));
     if (!Number.isFinite(pr)) continue;
 
+    /** Ballpark Pal model line (American odds); thead "BP" column pair — first is odds, second is implied %. */
+    let bpPrice = NaN;
+    if (cells.length > 14) {
+      bpPrice = parseAmericanNum(htmlText(cells[14]));
+    }
+
     const opp = htmlText(cells[17]).toUpperCase().replace(/\s+/g, " ").trim();
     if (!opp) continue;
 
@@ -306,6 +312,7 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
       player: playerRaw,
       line: ln,
       price: pr,
+      bp_price: Number.isFinite(bpPrice) ? bpPrice : null,
       consensus_win_prob: win,
       cs_star: csStar,
     });
@@ -449,6 +456,7 @@ export function buildEvTableBpp(rows, opts = {}) {
     game: `${r.away_team} @ ${r.home_team}`,
     market_label: MARKET_LABELS[r.market] ?? r.market,
     line_key: lineKey(r.line),
+    bp_price: Number.isFinite(Number(r.bp_price)) ? Number(r.bp_price) : null,
   }));
 
   let withFair = d.map((r) => {
@@ -543,6 +551,14 @@ export function buildEvTableBpp(rows, opts = {}) {
     bookDepth.set(gk, n);
   }
 
+  /** One BP (Ballpark Pal model American odds) per prop grid key; same across books when present. */
+  const bpByGrid = new Map();
+  for (const r of withFair) {
+    const gk = gridKey(r);
+    if (bpByGrid.has(gk)) continue;
+    if (r.bp_price != null && Number.isFinite(r.bp_price)) bpByGrid.set(gk, r.bp_price);
+  }
+
   /** @type {any[]} */
   const out = [];
   for (const bp of bestPrices) {
@@ -568,6 +584,8 @@ export function buildEvTableBpp(rows, opts = {}) {
     }
 
     const kelly = kellyBetDollars(cons.fair_prob, bestPrice, bankroll, kellyFrac);
+    const bpModel = bpByGrid.get(gk);
+    const bpFmt = bpModel != null && Number.isFinite(bpModel) ? fmtAmerican(bpModel) : "—";
 
     out.push({
       event_id: bp.event_id,
@@ -587,6 +605,8 @@ export function buildEvTableBpp(rows, opts = {}) {
       fair_fmt: fmtAmerican(cons.fair_odds),
       implied_fmt: impliedFmt,
       best_price_fmt: bestPriceFmt,
+      bp_price: bpModel ?? null,
+      bp_fmt: bpFmt,
       ev_pct: evPct,
       cs_star: Number.isFinite(bp.cs_star) ? bp.cs_star : null,
       kelly_fmt:

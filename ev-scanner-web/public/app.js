@@ -277,7 +277,7 @@ function fillFilters(data) {
 
   const thead = document.querySelector("#grid thead tr");
   if (thead) {
-    const staticCols = 16;
+    const staticCols = 17;
     while (thead.children.length > staticCols) {
       thead.removeChild(thead.lastChild);
     }
@@ -344,6 +344,7 @@ function render(rows, bankroll, books) {
       `<td>${esc(cs)}</td>`,
       `<td>${esc(impliedFmt)}</td>`,
       `<td>${esc(bestPriceFmt)}</td>`,
+      `<td>${esc(r.bp_fmt ?? (r.bp_price != null && Number.isFinite(r.bp_price) ? formatAm(r.bp_price) : "—"))}</td>`,
       `<td>${esc(r.market_label)}</td>`,
       `<td>${esc(r.side)}</td>`,
       `<td>${esc(r.game)}</td>`,

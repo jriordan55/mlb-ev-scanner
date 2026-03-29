@@ -6,6 +6,8 @@
  *   MLB_SCANNER_BPP_PARALLEL=1 (both days at once; default is sequential),
  *   MLB_SCANNER_MAX_ODDS_ROWS, MLB_SCANNER_MAX_TABLE_ROWS, MLB_SCANNER_PORT,
  *   MLB_SCANNER_SKIP_PARK_FACTORS=1
+ *   MLB_SCANNER_ODDS_SCREEN=0 — skip Odds-Screen book/BP overlay (default: on).
+ *   MLB_SCANNER_OS_TIMEOUT_SEC (default 45), MLB_SCANNER_OS_DELAY_MS, MLB_SCANNER_OS_PARALLEL=1
  * GET /api/health — quick up-check. GET /api/scan?nocache=1 — bypass server cache.
  */
 import http from "node:http";
@@ -13,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchBallparkPalOddsFlat, buildEvTableBpp, fetchParkFactors, attachParkFactors } from "./lib/bpp.mjs";
+import { mergeOddsScreenPrices } from "./lib/odds-screen.mjs";
 import { TARGET_BOOKS, BOOK_DISPLAY, BOOK_ABBR_UPPER, MARKET_LABELS } from "./lib/constants.mjs";
 
 const ALLOW_DEVIG_METHOD = new Set([
@@ -92,16 +95,32 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
   }
 
   console.error("[mlb-ev] fetching Ballpark Pal…");
-  const { flat, stats } = await fetchBallparkPalOddsFlat();
+  let { flat, stats } = await fetchBallparkPalOddsFlat();
   stats.flat_odds_rows = flat.length;
   console.error("[mlb-ev] flat odds rows:", flat.length, "http:", stats.http_status, "html bytes:", stats.raw_html_bytes);
-  // Kelly / boost recomputed on the client from fair_prob + best_price.
-  let ev = buildEvTableBpp(flat, {
+
+  const buildOpts = {
     bankroll: 1000,
     devigMethod: dmk,
     devigBooks: dbk,
     devigSource: dsk,
-  });
+  };
+  const os = await mergeOddsScreenPrices(flat, buildOpts);
+  flat = os.flat;
+  if (os.stats && Object.keys(os.stats).length) Object.assign(stats, os.stats);
+  if (stats.odds_screen_fetches != null) {
+    console.error(
+      "[mlb-ev] odds screen: fetches",
+      stats.odds_screen_fetches,
+      "bytes",
+      stats.odds_screen_html_bytes ?? 0,
+      "merged cells",
+      stats.odds_screen_merged_cells ?? 0,
+    );
+  }
+
+  // Kelly / boost recomputed on the client from fair_prob + best_price.
+  let ev = buildEvTableBpp(flat, buildOpts);
   stats.ev_table_rows = ev.length;
   console.error("[mlb-ev] ev table rows:", ev.length);
   if (ev.length === 0 && flat.length > 0) {

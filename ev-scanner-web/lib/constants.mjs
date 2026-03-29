@@ -1,5 +1,6 @@
 export const BALLPARK_PAL_PF_URL = "https://www.ballparkpal.com/Park-Factors.php";
 export const BALLPARK_PAL_POSITIVE_EV_URL = "https://www.ballparkpal.com/Positive-EV.php";
+export const BALLPARK_PAL_ODDS_SCREEN_URL = "https://www.ballparkpal.com/Odds-Screen.php";
 
 export const TARGET_BOOKS = ["draftkings", "fanduel", "espnbet", "betmgm", "novig", "caesars"];
 

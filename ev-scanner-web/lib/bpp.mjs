@@ -2,6 +2,7 @@ import {
   BALLPARK_PAL_PF_URL,
   BALLPARK_PAL_POSITIVE_EV_URL,
   TARGET_BOOKS,
+  SKIPPED_BOOK_KEYS,
   BOOK_DISPLAY,
   BOOK_ABBR_UPPER,
   MARKET_LABELS,
@@ -144,17 +145,17 @@ function bppPositiveEvBookAbbrToKey(abbr) {
     NOVIG: "novig",
     BVD: "betvictor",
     BETVICTOR: "betvictor",
-    KAL: "kalshi",
-    KALSHI: "kalshi",
-    BV: "bovada",
-    BOV: "bovada",
-    BOVADA: "bovada",
+    KAL: "__skip__",
+    KALSHI: "__skip__",
+    BV: "__skip__",
+    BOV: "__skip__",
+    BOVADA: "__skip__",
     SBP: "sharp_book_price",
     BKM: "bookmaker",
     BLY: "bally_bet",
     RIV: "betrivers",
-    SIN: "sin_book",
-    PRX: "prx",
+    SIN: "__skip__",
+    PRX: "__skip__",
     B365: "bet365",
     BET365: "bet365",
     HRK: "__skip__",
@@ -375,6 +376,11 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
       if (Number.isFinite(csVal)) csStar = csVal;
     }
 
+    let deltaVig = NaN;
+    if (deltaVigColIdx >= 0 && deltaVigColIdx < cells.length) {
+      deltaVig = parseDeltaVigFromTd(cells[deltaVigColIdx]);
+    }
+
     const lnSlug = Number.isFinite(ln) ? String(ln).replace(/[^0-9.-]/g, "_") : "NA";
     const eventId = `bpp_${d}_${marketKey}_${awayTm}_${homeTm}_L${lnSlug}`;
     const ck = canonicalBookKey(bkKey);
@@ -555,8 +561,8 @@ export function buildEvTableBpp(rows, opts = {}) {
 
   const keysInData = [...new Set(d.map((r) => r.bookmaker_key).filter(Boolean))].sort();
   const orderedBookKeys = [
-    ...TARGET_BOOKS.filter((k) => keysInData.includes(k)),
-    ...keysInData.filter((k) => !TARGET_BOOKS.includes(k)),
+    ...TARGET_BOOKS.filter((k) => keysInData.includes(k) && !SKIPPED_BOOK_KEYS.has(k)),
+    ...keysInData.filter((k) => !TARGET_BOOKS.includes(k) && !SKIPPED_BOOK_KEYS.has(k)),
   ];
   const booksForUi = orderedBookKeys.map((k) => ({
     key: canonicalBookKey(k),

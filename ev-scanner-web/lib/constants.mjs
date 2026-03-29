@@ -2,7 +2,7 @@ export const BALLPARK_PAL_PF_URL = "https://www.ballparkpal.com/Park-Factors.php
 export const BALLPARK_PAL_POSITIVE_EV_URL = "https://www.ballparkpal.com/Positive-EV.php";
 export const BALLPARK_PAL_ODDS_SCREEN_URL = "https://www.ballparkpal.com/Odds-Screen.php";
 
-/** Preferred sportsbook order for UI + devig defaults (Hard Rock excluded). */
+/** Preferred sportsbook order for UI + devig defaults (Hard Rock, Kalshi, Bovada, Sin, PRX excluded). */
 export const TARGET_BOOKS = [
   "draftkings",
   "fanduel",
@@ -11,17 +11,16 @@ export const TARGET_BOOKS = [
   "novig",
   "caesars",
   "betvictor",
-  "kalshi",
   "circa",
-  "bovada",
   "sharp_book_price",
   "bookmaker",
   "bally_bet",
   "betrivers",
-  "sin_book",
-  "prx",
   "bet365",
 ];
+
+/** Dropped from grid; rows from these keys are skipped at parse time. */
+export const SKIPPED_BOOK_KEYS = new Set(["kalshi", "bovada", "sin_book", "prx"]);
 
 export const BOOK_DISPLAY = {
   draftkings: "DraftKings",
@@ -33,14 +32,10 @@ export const BOOK_DISPLAY = {
   espnbet: "theScore",
   novig: "Novig",
   betvictor: "BetVictor",
-  kalshi: "Kalshi",
-  bovada: "Bovada",
   sharp_book_price: "Sharp Book Price",
   bookmaker: "BookMaker",
   bally_bet: "Bally Bet",
   betrivers: "Bet Rivers",
-  sin_book: "Sin",
-  prx: "PRX",
 };
 
 export const BOOK_ABBR_UPPER = {
@@ -51,15 +46,11 @@ export const BOOK_ABBR_UPPER = {
   espnbet: "TS",
   novig: "NV",
   betvictor: "BVD",
-  kalshi: "KAL",
   circa: "CIR",
-  bovada: "BV",
   sharp_book_price: "SBP",
   bookmaker: "BKM",
   bally_bet: "BLY",
   betrivers: "RIV",
-  sin_book: "SIN",
-  prx: "PRX",
   bet365: "B365",
 };
 

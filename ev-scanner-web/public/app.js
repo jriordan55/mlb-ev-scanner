@@ -6,15 +6,11 @@ const FAVICON = {
   novig: "novig.com",
   caesars: "caesars.com",
   betvictor: "betvictor.com",
-  kalshi: "kalshi.com",
   circa: "circasports.com",
-  bovada: "bovada.lv",
   sharp_book_price: "sportsbookreview.com",
   bookmaker: "bookmaker.eu",
   bally_bet: "ballybet.com",
   betrivers: "betrivers.com",
-  sin_book: "google.com",
-  prx: "google.com",
   bet365: "bet365.com",
 };
 
@@ -27,15 +23,11 @@ const DEVIG_BOOK_KEYS = [
   "novig",
   "caesars",
   "betvictor",
-  "kalshi",
   "circa",
-  "bovada",
   "sharp_book_price",
   "bookmaker",
   "bally_bet",
   "betrivers",
-  "sin_book",
-  "prx",
   "bet365",
 ];
 
@@ -47,15 +39,11 @@ const DEVIG_LABEL = {
   novig: "Novig",
   caesars: "Caesars",
   betvictor: "BetVictor",
-  kalshi: "Kalshi",
   circa: "Circa",
-  bovada: "Bovada",
   sharp_book_price: "Sharp Book Price",
   bookmaker: "BookMaker",
   bally_bet: "Bally Bet",
   betrivers: "Bet Rivers",
-  sin_book: "Sin",
-  prx: "PRX",
   bet365: "Bet365",
 };
 
@@ -220,11 +208,14 @@ function getSavedDevigWeights() {
     if (!s) return null;
     const o = JSON.parse(s);
     if (!o || typeof o !== "object" || Array.isArray(o)) return null;
+    const allowed = new Set(DEVIG_BOOK_KEYS);
     const out = {};
     for (const [k, v] of Object.entries(o)) {
+      const key = String(k).trim();
+      if (!allowed.has(key)) continue;
       const n = Number(v);
       if (!Number.isFinite(n) || n <= 0) continue;
-      out[String(k).trim()] = n;
+      out[key] = n;
     }
     return Object.keys(out).length ? out : null;
   } catch {
@@ -425,20 +416,15 @@ function fillFilters(data) {
     bpTh.title = "Ballpark Pal model — used in fair / devig; not bettable";
     bpTh.innerHTML = `<span class="bh bh-logo-only"><img src="${esc(favUrl(BP_FAV_DOMAIN))}" alt="" width="20" height="20"/></span>`;
     thead.appendChild(bpTh);
-    const wApplied = data.devigWeights || null;
     for (const b of data.books || []) {
       const th = document.createElement("th");
       th.className = "book-head";
-      th.title = b.label;
+      th.title = b.label ?? b.abbr;
       const dom = FAVICON[b.key];
-      let pct = "";
-      if (wApplied && wApplied[b.key] != null && Number.isFinite(Number(wApplied[b.key]))) {
-        pct = `<span class="bh-w">${Math.round(Number(wApplied[b.key]) * 100)}%</span>`;
-      }
       const img = dom
-        ? `<img src="${esc(favUrl(dom))}" alt="" width="20" height="20"/>`
+        ? `<img src="${esc(favUrl(dom))}" alt="" width="22" height="22" loading="lazy"/>`
         : `<span class="bh-fallback">${esc(b.abbr)}</span>`;
-      th.innerHTML = `<div class="bh-stack"><span class="bh-abbr">${esc(b.abbr)}</span><span class="bh-scale" title="Weight in devig">&#x2696;</span>${pct}<span class="bh bh-logo-only">${img}</span></div>`;
+      th.innerHTML = `<span class="bh bh-logo-only">${img}</span>`;
       thead.appendChild(th);
     }
   }

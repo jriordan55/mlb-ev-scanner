@@ -49,6 +49,50 @@ const ALLOW_DEVIG_METHOD = new Set([
   "average",
 ]);
 
+function normalizeDevigBooksQuery(db) {
+  const t = String(db ?? "").trim();
+  if (!t || t.toUpperCase() === "ALL") return "ALL";
+  const parts = t
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const ok = [...new Set(parts.filter((p) => TARGET_BOOKS.includes(p)))];
+  return ok.length ? ok.join(",") : "ALL";
+}
+
+function parseDevigWeightsQuery(raw) {
+  if (raw == null || raw === "") return null;
+  try {
+    const o = JSON.parse(String(raw));
+    if (!o || typeof o !== "object" || Array.isArray(o)) return null;
+    const out = {};
+    for (const [k, v] of Object.entries(o)) {
+      const n = Number(v);
+      if (!Number.isFinite(n) || n <= 0) continue;
+      out[String(k).trim()] = n;
+    }
+    return Object.keys(out).length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Positive weights → shares summing to 1 (for UI headers). */
+function normalizeDevigWeightsForDisplay(w) {
+  if (!w || typeof w !== "object") return null;
+  let s = 0;
+  const n = {};
+  for (const [k, v] of Object.entries(w)) {
+    const x = Number(v);
+    if (!Number.isFinite(x) || x <= 0) continue;
+    n[k] = x;
+    s += x;
+  }
+  if (s <= 0) return null;
+  for (const k of Object.keys(n)) n[k] /= s;
+  return n;
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, "public");
 // Render / Railway / Fly set PORT; local dev can use MLB_SCANNER_PORT or default 3847.
@@ -118,8 +162,9 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
   const dmk = scanOpts.devigMethod ?? "multiplicative";
   const dbk = scanOpts.devigBooks ?? "ALL";
   const dsk = scanOpts.devigSource ?? "ALL";
+  const dwJson = scanOpts.devigWeights ? JSON.stringify(scanOpts.devigWeights) : "";
   const betMarketId = resolveBetMarketId(scanOpts.betMarket);
-  const cacheKey = `${skipPf}|${dmk}|${dbk}|${dsk}|${betMarketId}`;
+  const cacheKey = `${skipPf}|${dmk}|${dbk}|${dsk}|${betMarketId}|${dwJson}`;
   if (
     !bypassCache &&
     scanCache.payload &&
@@ -207,6 +252,7 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
     marketLabels: Object.fromEntries(markets.map((m) => [m, MARKET_LABELS[m] ?? m])),
     rows: ev,
     books: booksOut,
+    devigWeights: normalizeDevigWeightsForDisplay(scanOpts.devigWeights) ?? null,
     betMarket:
       betMarketId === 0
         ? "All"
@@ -254,13 +300,13 @@ const server = http.createServer(async (req, res) => {
       const nocache = params.get("nocache") === "1";
       let dm = params.get("devigMethod") || "multiplicative";
       if (!ALLOW_DEVIG_METHOD.has(dm)) dm = "multiplicative";
-      let db = params.get("devigBooks") || "ALL";
-      if (db !== "ALL" && !TARGET_BOOKS.includes(db)) db = "ALL";
+      let db = normalizeDevigBooksQuery(params.get("devigBooks") || "ALL");
       let ds = params.get("devigSource") || "ALL";
       if (ds !== "ALL" && !TARGET_BOOKS.includes(ds)) ds = "ALL";
       let bmk = params.get("market") || "All";
       if (bmk !== "All" && !BPP_MARKET_KEY_TO_BET_ID[bmk]) bmk = "All";
-      const scanOpts = { devigMethod: dm, devigBooks: db, devigSource: ds, betMarket: bmk };
+      const dw = parseDevigWeightsQuery(params.get("devigWeights"));
+      const scanOpts = { devigMethod: dm, devigBooks: db, devigSource: ds, betMarket: bmk, devigWeights: dw };
       const base = await runScan(skipPf, nocache, scanOpts);
       sendJson(res, 200, base);
     } catch (e) {

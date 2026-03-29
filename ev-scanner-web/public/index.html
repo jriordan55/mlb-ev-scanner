@@ -3,7 +3,6 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- If you open this file directly (file://), set your server URL so the API works: -->
   <meta name="api-origin" content="" />
   <title>MLB +EV Scanner</title>
   <link rel="stylesheet" href="/styles.css" />
@@ -13,6 +12,7 @@
     <h1 class="brand">MLB +EV Scanner</h1>
     <div class="top-btns">
       <button type="button" class="top-btn dark" id="btnHelp">How this works</button>
+      <button type="button" class="top-btn dark" id="btnDevig">Devig books…</button>
       <button type="button" class="top-btn" id="btnRefresh">Refresh</button>
     </div>
   </header>
@@ -46,7 +46,15 @@
         <option value="caesars">Caesars</option>
         <option value="betvictor">BetVictor</option>
         <option value="kalshi">Kalshi</option>
-        <option value="hardrock">Hard Rock</option>
+        <option value="circa">Circa</option>
+        <option value="bovada">Bovada</option>
+        <option value="sharp_book_price">Sharp Book Price</option>
+        <option value="bookmaker">BookMaker</option>
+        <option value="bally_bet">Bally Bet</option>
+        <option value="betrivers">Bet Rivers</option>
+        <option value="sin_book">Sin</option>
+        <option value="prx">PRX</option>
+        <option value="bet365">Bet365</option>
       </select>
     </label>
     <label class="pill prop-pill">Fair from
@@ -60,7 +68,15 @@
         <option value="caesars">Caesars</option>
         <option value="betvictor">BetVictor</option>
         <option value="kalshi">Kalshi</option>
-        <option value="hardrock">Hard Rock</option>
+        <option value="circa">Circa</option>
+        <option value="bovada">Bovada</option>
+        <option value="sharp_book_price">Sharp Book Price</option>
+        <option value="bookmaker">BookMaker</option>
+        <option value="bally_bet">Bally Bet</option>
+        <option value="betrivers">Bet Rivers</option>
+        <option value="sin_book">Sin</option>
+        <option value="prx">PRX</option>
+        <option value="bet365">Bet365</option>
       </select>
     </label>
     <label class="pill">O/U
@@ -95,19 +111,19 @@
 
   <p class="status" id="status">Loading…</p>
 
-  <div class="table-wrap">
+  <div class="table-wrap" id="tableScroll">
     <table class="ev-grid" id="grid">
       <thead>
         <tr>
-          <th>EV %</th>
-          <th>Kelly</th>
-          <th>Best</th>
-          <th>Player</th>
+          <th class="col-pin col-pin-1">EV %</th>
+          <th class="col-pin col-pin-2">Kelly</th>
+          <th class="col-pin col-pin-3">Best book<br /><button type="button" class="th-mini" id="toggleBestOdds" title="Show or hide American odds next to the book logo">− Hide odds</button></th>
+          <th class="col-pin col-pin-4">Player</th>
           <th>Line</th>
           <th>Fair</th>
           <th>CS*</th>
-          <th>Impl</th>
-          <th>Odds</th>
+          <th>Implied</th>
+          <th title="Probability delta: outlier book vs market consensus (with vig)">Δ (vig)</th>
           <th>Prop</th>
           <th>O/U</th>
           <th>Matchup</th>
@@ -121,17 +137,91 @@
     </table>
   </div>
 
-  <dialog id="helpDlg" class="modal">
+  <dialog id="devigDlg" class="modal modal-wide">
+    <form method="dialog" id="devigForm">
+      <h2>Select Devig Books</h2>
+      <p class="modal-lead">Choose which books supply two-way prices for devigging and optional weights for <strong>consensus fair</strong> (median if no weights). Weights are normalized to 100%.</p>
+      <label class="dlg-search">Search
+        <input type="search" id="devigSearch" placeholder="Book name…" autocomplete="off" />
+      </label>
+      <div class="devig-grid" id="devigBookGrid"></div>
+      <p class="dlg-hint">Checked books are also sent as <strong>Devig by</strong> (comma list). Save clears custom weights if none checked.</p>
+      <div class="dlg-actions">
+        <button type="submit" class="top-btn" value="save">Apply &amp; rescan</button>
+        <button type="button" class="top-btn dark" id="devigClear">Clear weights</button>
+        <button type="button" class="top-btn dark" id="devigClose">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="helpDlg" class="modal modal-wide help-dlg">
     <form method="dialog">
       <h2>How this works</h2>
-      <p>Odds come from <a href="https://www.ballparkpal.com/Positive-EV.php" target="_blank" rel="noopener">Ballpark Pal Positive EV</a> (<code>Positive-EV.php</code> with <code>UseMyBooks=0</code>). Pick a <strong>Market</strong> to set <code>BetMarket</code> on that page (or All for every market). Rows use two-way devig across the books you include; <strong>Ballpark Pal’s BP column</strong> is devigged the same way and folded into the <strong>consensus fair</strong> (median with book fairs). BP is <strong>not</strong> a bettable book—the <strong>Best</strong> column only picks among sportsbooks. Optional: set <code>MLB_SCANNER_ODDS_SCREEN=1</code> on the server to overlay Odds Screen prices.</p>
-      <p><strong>Devig by</strong> limits which sportsbooks supply over/under pairs for per-book devig. <strong>Fair from</strong> narrows which books feed the consensus median (BP fair is still merged in when both O and U BP prices exist). <strong>Boost</strong> adjusts EV, implied, Kelly, and best odds only.</p>
-      <p><strong>Fast tips:</strong> Park factors are an extra HTTP request; add <code>?skipPf=1</code> to the URL or set <code>MLB_SCANNER_SKIP_PARK_FACTORS=1</code> on the server for a quicker first paint.</p>
+      <div class="help-body">
+        <p>The scanner compares each prop’s <strong>fair price</strong>—the price that would reflect win odds with the sportsbook margin removed—to the price available to bet. When fair probability supports a better payout than the line you can take, the opportunity is flagged as positive expected value (+EV).</p>
+
+        <h3>Market</h3>
+        <p>Restricts the board to a single prop category (for example hits, home runs, or strikeouts) or leaves all categories visible.</p>
+
+        <h3>Devig method</h3>
+        <p>Each side of a two-way market carries an implied win probability; together they exceed 100% because of the book’s hold. Removing that hold—<strong>devigging</strong>—produces fair win chances for each side. The method you select determines how that adjustment is performed. Results are expressed as fair American odds and drive Expected Value.</p>
+        <ul>
+          <li><strong>Multiplicative</strong> — Scales both implied probabilities down proportionally so they sum to 100%. The relative shape of the market is preserved; this approach is standard and straightforward to interpret.</li>
+          <li><strong>Additive</strong> — Estimates total overround, subtracts half from each side’s implied probability, then renormalizes. Delivers a symmetric response to the book’s margin.</li>
+          <li><strong>Probit</strong> — Maps implied probabilities through the normal distribution, applies a symmetric adjustment, and maps back.</li>
+          <li><strong>Shin</strong> — Applies a Shin-style (Zangwill) correction so adjusted probabilities respect the posted market shape while summing to 100%.</li>
+          <li><strong>Power</strong> — Raises each implied probability to a calibrated power until the pair sums to 100%.</li>
+          <li><strong>Worst case</strong> — Evaluates multiple reasonable fair probabilities and uses the one that gives your side the least edge.</li>
+          <li><strong>Average</strong> — Computes fair probabilities under several methods, then averages the fair probability for the side you are analyzing.</li>
+        </ul>
+
+        <h3>Best book</h3>
+        <p>When set to a specific sportsbook, the main table only lists props where that book posts the best price for the line. <strong>All rows</strong> shows every prop that passes the other filters, regardless of which book is best.</p>
+
+        <h3>Devig by</h3>
+        <p>Restricts which sportsbooks feed the two-way prices used in devigging. When set to all books, every available line in scope is eligible. Use <strong>Devig books…</strong> to pick multiple books and optional weights for consensus fair.</p>
+
+        <h3>O/U</h3>
+        <p>Filters to overs only, unders only, or both.</p>
+
+        <h3>Game</h3>
+        <p>Limits the view to one matchup or shows the full slate.</p>
+
+        <h3>Ballpark Pal park factors (table columns)</h3>
+        <p>The <strong>HR</strong>, <strong>2B/3B</strong>, <strong>1B</strong>, and <strong>Runs</strong> columns show combined effect park factors from <a href="https://www.ballparkpal.com/" target="_blank" rel="noopener">Ballpark Pal</a>, matched to each game on your board. They are informational context for the slate, not inputs to the EV math in this app.</p>
+        <p><strong>Model and data:</strong> Ballpark Pal describes these as coming from a machine-learning model trained on a very large set of batted balls and games, with the goal of isolating how stadium and weather interact at each venue.</p>
+        <p><strong>How to read the numbers:</strong> The percentages are expressed relative to the league-wide MLB average for the season—not relative to that park’s own long-run baseline.</p>
+        <p><strong>Caveat:</strong> Park effects are small and noisy in any one game. Treat these columns as context, not a guarantee.</p>
+
+        <h3>Bankroll ($)</h3>
+        <p>Converts the Kelly stake from a fraction of bankroll into dollars in the Kelly column. Filter logic and line selection are unchanged.</p>
+
+        <h3>Boost</h3>
+        <p>When a profit boost or similar promotion increases winnings on a winning ticket, select the corresponding level so Expected Value and Kelly reflect the enhanced payout. Fair Value remains the pre-promotion benchmark from the market. No Sweat is approximated for modeling purposes.</p>
+
+        <h3>Historical ROI</h3>
+        <p>Summary cards (if enabled) draw on your archived results file. They respect Market, Devig method, and Best book when those filters are set.</p>
+
+        <h3>Main table</h3>
+        <ul>
+          <li><strong>Expected Value:</strong> Modeled edge versus fair, in percent, at the effective price (including any boost).</li>
+          <li><strong>Kelly:</strong> Full-Kelly dollar suggestion for the stated bankroll—illustrative sizing only.</li>
+          <li><strong>Best book:</strong> Operator posting the top price for that line; odds can be hidden with the header toggle.</li>
+          <li><strong>Player, Line, Prop, O/U:</strong> Participant, threshold, market label, and side.</li>
+          <li><strong>Fair:</strong> Fair American odds after devig; excludes promotions.</li>
+          <li><strong>CS*:</strong> Ballpark Pal consensus (American odds) from the source page.</li>
+          <li><strong>Implied:</strong> Win probability implied by the price you are using, after boost if applicable.</li>
+          <li><strong>Δ (vig):</strong> Probability delta between the outlier book and the market consensus (with vig), when present on the Ballpark Pal table.</li>
+          <li><strong>Matchup / park columns:</strong> Teams and Ballpark Pal combined-effect park factors.</li>
+          <li>Additional columns list each book’s price for side-by-side comparison.</li>
+        </ul>
+        <p>Odds are sourced from <a href="https://www.ballparkpal.com/Positive-EV.php" target="_blank" rel="noopener">Ballpark Pal Positive EV</a> (<code>UseMyBooks=0</code>). Rows require at least two books with a price on the same line (server default). Optional: <code>MLB_SCANNER_ODDS_SCREEN=1</code> overlays Odds Screen prices.</p>
+      </div>
       <button value="ok" class="top-btn">Close</button>
     </form>
   </dialog>
 
-  <script src="/app.js?v=20260331" type="module"></script>
+  <script src="/app.js?v=20260332" type="module"></script>
   <script>
     setTimeout(function () {
       var s = document.getElementById("status");

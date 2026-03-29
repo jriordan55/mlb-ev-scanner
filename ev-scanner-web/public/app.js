@@ -7,8 +7,60 @@ const FAVICON = {
   caesars: "caesars.com",
   betvictor: "betvictor.com",
   kalshi: "kalshi.com",
-  hardrock: "hardrock.bet",
+  circa: "circasports.com",
+  bovada: "bovada.lv",
+  sharp_book_price: "sportsbookreview.com",
+  bookmaker: "bookmaker.eu",
+  bally_bet: "ballybet.com",
+  betrivers: "betrivers.com",
+  sin_book: "google.com",
+  prx: "google.com",
+  bet365: "bet365.com",
 };
+
+/** Keys listed in Devig modal (aligned with server TARGET_BOOKS). */
+const DEVIG_BOOK_KEYS = [
+  "draftkings",
+  "fanduel",
+  "espnbet",
+  "betmgm",
+  "novig",
+  "caesars",
+  "betvictor",
+  "kalshi",
+  "circa",
+  "bovada",
+  "sharp_book_price",
+  "bookmaker",
+  "bally_bet",
+  "betrivers",
+  "sin_book",
+  "prx",
+  "bet365",
+];
+
+const DEVIG_LABEL = {
+  draftkings: "DraftKings",
+  fanduel: "FanDuel",
+  espnbet: "theScore",
+  betmgm: "BetMGM",
+  novig: "Novig",
+  caesars: "Caesars",
+  betvictor: "BetVictor",
+  kalshi: "Kalshi",
+  circa: "Circa",
+  bovada: "Bovada",
+  sharp_book_price: "Sharp Book Price",
+  bookmaker: "BookMaker",
+  bally_bet: "Bally Bet",
+  betrivers: "Bet Rivers",
+  sin_book: "Sin",
+  prx: "PRX",
+  bet365: "Bet365",
+};
+
+const LS_DEVIG_W = "ev_devig_weights";
+const LS_HIDE_ODDS = "ev_hide_best_odds";
 
 const BP_FAV_DOMAIN = "ballparkpal.com";
 const MLB_LOGO_ABBR = { ATH: "oak", WSH: "wsh", SFG: "sf", TBR: "tb", KCR: "kc" };
@@ -162,12 +214,36 @@ function apiOrigin() {
   return "";
 }
 
+function getSavedDevigWeights() {
+  try {
+    const s = localStorage.getItem(LS_DEVIG_W);
+    if (!s) return null;
+    const o = JSON.parse(s);
+    if (!o || typeof o !== "object" || Array.isArray(o)) return null;
+    const out = {};
+    for (const [k, v] of Object.entries(o)) {
+      const n = Number(v);
+      if (!Number.isFinite(n) || n <= 0) continue;
+      out[String(k).trim()] = n;
+    }
+    return Object.keys(out).length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
 function scanUrl(opts = {}) {
   const p = new URLSearchParams();
   if (window.location.search.includes("skipPf=1")) p.set("skipPf", "1");
   if (opts.nocache) p.set("nocache", "1");
   p.set("devigMethod", document.getElementById("devigMethod")?.value || "multiplicative");
-  p.set("devigBooks", document.getElementById("devigBooks")?.value || "ALL");
+  const wMap = getSavedDevigWeights();
+  if (wMap && Object.keys(wMap).length) {
+    p.set("devigWeights", JSON.stringify(wMap));
+    p.set("devigBooks", Object.keys(wMap).join(","));
+  } else {
+    p.set("devigBooks", document.getElementById("devigBooks")?.value || "ALL");
+  }
   p.set("devigSource", document.getElementById("devigSource")?.value || "ALL");
   const mk = document.getElementById("market")?.value || "All";
   p.set("market", mk === "All" ? "All" : mk);
@@ -349,14 +425,20 @@ function fillFilters(data) {
     bpTh.title = "Ballpark Pal model — used in fair / devig; not bettable";
     bpTh.innerHTML = `<span class="bh bh-logo-only"><img src="${esc(favUrl(BP_FAV_DOMAIN))}" alt="" width="20" height="20"/></span>`;
     thead.appendChild(bpTh);
+    const wApplied = data.devigWeights || null;
     for (const b of data.books || []) {
       const th = document.createElement("th");
       th.className = "book-head";
       th.title = b.label;
       const dom = FAVICON[b.key];
-      th.innerHTML = dom
-        ? `<span class="bh bh-logo-only"><img src="${esc(favUrl(dom))}" alt="" width="20" height="20"/></span>`
-        : esc(b.label);
+      let pct = "";
+      if (wApplied && wApplied[b.key] != null && Number.isFinite(Number(wApplied[b.key]))) {
+        pct = `<span class="bh-w">${Math.round(Number(wApplied[b.key]) * 100)}%</span>`;
+      }
+      const img = dom
+        ? `<img src="${esc(favUrl(dom))}" alt="" width="20" height="20"/>`
+        : `<span class="bh-fallback">${esc(b.abbr)}</span>`;
+      th.innerHTML = `<div class="bh-stack"><span class="bh-abbr">${esc(b.abbr)}</span><span class="bh-scale" title="Weight in devig">&#x2696;</span>${pct}<span class="bh bh-logo-only">${img}</span></div>`;
       thead.appendChild(th);
     }
   }
@@ -373,8 +455,20 @@ function matchupCell(game) {
   return `<td class="td-matchup"><span class="matchup-logos"><img src="${ua}" alt="" width="22" height="22" loading="lazy" decoding="async"/><span class="at">@</span><img src="${ub}" alt="" width="22" height="22" loading="lazy" decoding="async"/></span></td>`;
 }
 
+function hideBestOddsEnabled() {
+  return localStorage.getItem(LS_HIDE_ODDS) === "1";
+}
+
+function syncToggleOddsButton() {
+  const btn = document.getElementById("toggleBestOdds");
+  if (!btn) return;
+  const on = hideBestOddsEnabled();
+  btn.textContent = on ? "+ Show odds" : "− Hide odds";
+}
+
 function render(rows, bankroll, books) {
   const tb = document.getElementById("tbody");
+  const hideOdds = hideBestOddsEnabled();
   const boostPct = resolveBoostProfitPct(
     document.getElementById("boostMode")?.value,
     document.getElementById("boostCustomPct")?.value,
@@ -416,21 +510,34 @@ function render(rows, bankroll, books) {
     const bestImg = dom
       ? `<img class="best-book-logo" src="${esc(favUrl(dom))}" alt="" width="20" height="20" onerror="this.style.display='none'"/>`
       : "";
+    const oddsPart =
+      !hideOdds && bestPriceStr ? `<span class="best-odds-txt">${esc(bestPriceStr)}</span>` : "";
+    const bestBookInner =
+      oddsPart || bestImg
+        ? `<div class="td-best-inner">${oddsPart}${bestImg ? `<span class="best-logo-wrap">${bestImg}</span>` : ""}</div>`
+        : "";
     const bpStr =
       r.bp_price != null && Number.isFinite(Number(r.bp_price))
         ? cellAmerican(r.bp_price)
         : cellDashBlank(r.bp_fmt);
 
+    const dVig =
+      r.delta_vig_fmt != null && r.delta_vig_fmt !== "—"
+        ? esc(r.delta_vig_fmt)
+        : r.delta_prob_consensus_vig != null && Number.isFinite(Number(r.delta_prob_consensus_vig))
+          ? `${(Number(r.delta_prob_consensus_vig) * 100).toFixed(1)}%`
+          : "";
+
     const staticCells = [
-      `<td class="${evc}">${esc(evStr)}</td>`,
-      `<td>${esc(kelly)}</td>`,
-      `<td class="td-best-logo">${bestImg}</td>`,
-      `<td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">${esc(r.player)}</td>`,
+      `<td class="col-pin col-pin-1 ${evc}">${esc(evStr)}</td>`,
+      `<td class="col-pin col-pin-2">${esc(kelly)}</td>`,
+      `<td class="col-pin col-pin-3 td-best-book">${bestBookInner}</td>`,
+      `<td class="col-pin col-pin-4 td-player">${esc(r.player)}</td>`,
       `<td>${esc(r.line)}</td>`,
       `<td>${fairDisp ? esc(fairDisp) : ""}</td>`,
       `<td>${cs ? esc(cs) : ""}</td>`,
       `<td>${impliedFmt ? esc(impliedFmt) : ""}</td>`,
-      `<td>${bestPriceStr ? esc(bestPriceStr) : ""}</td>`,
+      `<td class="td-delta">${dVig ? esc(dVig) : ""}</td>`,
       `<td>${esc(r.market_label)}</td>`,
       `<td>${esc(r.side)}</td>`,
       matchupCell(r.game),
@@ -477,6 +584,75 @@ function debounce(fn, ms) {
 document.getElementById("btnRefresh")?.addEventListener("click", () => load({ nocache: true }));
 document.getElementById("btnHelp")?.addEventListener("click", () => document.getElementById("helpDlg")?.showModal());
 
+function buildDevigModalGrid() {
+  const grid = document.getElementById("devigBookGrid");
+  if (!grid) return;
+  const saved = getSavedDevigWeights() || {};
+  const q = (document.getElementById("devigSearch")?.value || "").toLowerCase().trim();
+  grid.innerHTML = "";
+  for (const key of DEVIG_BOOK_KEYS) {
+    const label = DEVIG_LABEL[key] || key;
+    if (q && !label.toLowerCase().includes(q) && !key.includes(q)) continue;
+    const row = document.createElement("label");
+    row.className = "devig-row";
+    const w0 = saved[key] != null ? String(saved[key]) : "";
+    row.innerHTML = `<input type="checkbox" data-book="${key}" ${saved[key] != null ? "checked" : ""} /><span class="devig-name">${esc(label)}</span><input type="number" class="devig-w" min="0" step="1" placeholder="%" value="${esc(w0)}" />`;
+    grid.appendChild(row);
+  }
+}
+
+document.getElementById("btnDevig")?.addEventListener("click", () => {
+  buildDevigModalGrid();
+  document.getElementById("devigDlg")?.showModal();
+});
+
+document.getElementById("devigSearch")?.addEventListener("input", debounce(() => buildDevigModalGrid(), 200));
+
+document.getElementById("devigForm")?.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const grid = document.getElementById("devigBookGrid");
+  const weights = {};
+  if (grid) {
+    for (const lab of grid.querySelectorAll("label.devig-row")) {
+      const cb = lab.querySelector('input[type="checkbox"]');
+      const inp = lab.querySelector("input.devig-w");
+      if (!cb?.checked || !inp) continue;
+      const k = cb.getAttribute("data-book");
+      const n = Number.parseFloat(inp.value);
+      if (!k || !Number.isFinite(n) || n <= 0) continue;
+      weights[k] = n;
+    }
+  }
+  if (Object.keys(weights).length) {
+    localStorage.setItem(LS_DEVIG_W, JSON.stringify(weights));
+  } else {
+    localStorage.removeItem(LS_DEVIG_W);
+  }
+  document.getElementById("devigDlg")?.close();
+  load({ nocache: true });
+});
+
+document.getElementById("devigClear")?.addEventListener("click", () => {
+  localStorage.removeItem(LS_DEVIG_W);
+  buildDevigModalGrid();
+  load({ nocache: true });
+});
+
+document.getElementById("devigClose")?.addEventListener("click", () => {
+  document.getElementById("devigDlg")?.close();
+});
+
+document.getElementById("toggleBestOdds")?.addEventListener("click", () => {
+  const on = localStorage.getItem(LS_HIDE_ODDS) === "1";
+  localStorage.setItem(LS_HIDE_ODDS, on ? "" : "1");
+  syncToggleOddsButton();
+  redraw();
+});
+
+document.getElementById("devigBooks")?.addEventListener("change", () => {
+  localStorage.removeItem(LS_DEVIG_W);
+});
+
 const reloadScan = debounce(() => load(), 350);
 ["devigMethod", "devigBooks", "devigSource"].forEach((id) => {
   document.getElementById(id)?.addEventListener("change", () => reloadScan());
@@ -498,4 +674,5 @@ document.getElementById("boostMode")?.addEventListener("change", () => {
 
 document.getElementById("boostCustomPct")?.addEventListener("input", debounce(() => redraw(), 200));
 
+syncToggleOddsButton();
 load();

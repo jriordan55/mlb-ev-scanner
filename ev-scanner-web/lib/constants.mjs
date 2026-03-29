@@ -2,6 +2,7 @@ export const BALLPARK_PAL_PF_URL = "https://www.ballparkpal.com/Park-Factors.php
 export const BALLPARK_PAL_POSITIVE_EV_URL = "https://www.ballparkpal.com/Positive-EV.php";
 export const BALLPARK_PAL_ODDS_SCREEN_URL = "https://www.ballparkpal.com/Odds-Screen.php";
 
+/** Preferred sportsbook order for UI + devig defaults (Hard Rock excluded). */
 export const TARGET_BOOKS = [
   "draftkings",
   "fanduel",
@@ -11,7 +12,15 @@ export const TARGET_BOOKS = [
   "caesars",
   "betvictor",
   "kalshi",
-  "hardrock",
+  "circa",
+  "bovada",
+  "sharp_book_price",
+  "bookmaker",
+  "bally_bet",
+  "betrivers",
+  "sin_book",
+  "prx",
+  "bet365",
 ];
 
 export const BOOK_DISPLAY = {
@@ -25,7 +34,13 @@ export const BOOK_DISPLAY = {
   novig: "Novig",
   betvictor: "BetVictor",
   kalshi: "Kalshi",
-  hardrock: "Hard Rock",
+  bovada: "Bovada",
+  sharp_book_price: "Sharp Book Price",
+  bookmaker: "BookMaker",
+  bally_bet: "Bally Bet",
+  betrivers: "Bet Rivers",
+  sin_book: "Sin",
+  prx: "PRX",
 };
 
 export const BOOK_ABBR_UPPER = {
@@ -37,7 +52,15 @@ export const BOOK_ABBR_UPPER = {
   novig: "NV",
   betvictor: "BVD",
   kalshi: "KAL",
-  hardrock: "HRK",
+  circa: "CIR",
+  bovada: "BV",
+  sharp_book_price: "SBP",
+  bookmaker: "BKM",
+  bally_bet: "BLY",
+  betrivers: "RIV",
+  sin_book: "SIN",
+  prx: "PRX",
+  bet365: "B365",
 };
 
 export const MARKET_LABELS = {
@@ -49,7 +72,6 @@ export const MARKET_LABELS = {
   batter_doubles: "Doubles",
   batter_triples: "Triples",
   batter_home_runs: "Home Runs",
-  batter_strikeouts: "Batter K",
   batter_walks: "Batter Walks",
   batter_hits: "Hits",
   batter_total_bases: "Total Bases",
@@ -57,6 +79,7 @@ export const MARKET_LABELS = {
   batter_rbis: "RBI",
   batter_runs_scored: "Runs",
   batter_hits_runs_rbis: "H + R + RBI",
+  batter_strikeouts: "Batter Strikeouts",
   pitcher_walks: "Pitcher Walks",
   pitcher_strikeouts: "Strikeouts",
   pitcher_earned_runs: "Earned Runs",

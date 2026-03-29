@@ -53,9 +53,17 @@ function canonicalBookKey(x) {
   if (["novig", "novig_us", "novig_exchange", "nvg", "nv", "nvig", "no_vig", "no-vig", "no vig"].includes(k))
     return "novig";
   if (k === "bet365") return "bet365";
-  if (["betvictor", "bvd", "bv"].includes(k)) return "betvictor";
+  if (["betvictor", "bvd"].includes(k)) return "betvictor";
+  if (["bovada", "bv"].includes(k)) return "bovada";
   if (["kalshi", "kal"].includes(k)) return "kalshi";
-  if (["hardrock", "hrk", "hardrockbet"].includes(k)) return "hardrock";
+  if (["sharp_book_price", "sbp"].includes(k)) return "sharp_book_price";
+  if (["bookmaker", "bkm"].includes(k)) return "bookmaker";
+  if (["bally_bet", "bly"].includes(k)) return "bally_bet";
+  if (["betrivers", "riv"].includes(k)) return "betrivers";
+  if (["sin_book", "sin"].includes(k)) return "sin_book";
+  if (k === "prx") return "prx";
+  if (["circa", "cir"].includes(k)) return "circa";
+  if (["hardrock", "hrk", "hardrockbet"].includes(k)) return "bpp_skip";
   return k;
 }
 

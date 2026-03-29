@@ -105,9 +105,16 @@ function canonicalBookKey(x) {
   if (["novig", "novig_us", "novig_exchange", "nvg", "nv", "nvig", "no_vig", "no-vig", "no vig"].includes(k))
     return "novig";
   if (k === "bet365") return "bet365";
-  if (["betvictor", "bvd", "bv"].includes(k)) return "betvictor";
+  if (["betvictor", "bvd"].includes(k)) return "betvictor";
+  if (["bovada", "bv"].includes(k)) return "bovada";
   if (["kalshi", "kal"].includes(k)) return "kalshi";
-  if (["hardrock", "hrk", "hardrockbet"].includes(k)) return "hardrock";
+  if (["sharp_book_price", "sbp", "sharp"].includes(k)) return "sharp_book_price";
+  if (["bookmaker", "bkm"].includes(k)) return "bookmaker";
+  if (["bally_bet", "bly", "bally"].includes(k)) return "bally_bet";
+  if (["betrivers", "riv", "bet_rivers"].includes(k)) return "betrivers";
+  if (["sin_book", "sin"].includes(k)) return "sin_book";
+  if (["prx"].includes(k)) return "prx";
+  if (["circa", "cir"].includes(k)) return "circa";
   return k;
 }
 
@@ -139,9 +146,21 @@ function bppPositiveEvBookAbbrToKey(abbr) {
     BETVICTOR: "betvictor",
     KAL: "kalshi",
     KALSHI: "kalshi",
-    HRK: "hardrock",
-    HARDROCK: "hardrock",
+    BV: "bovada",
+    BOV: "bovada",
+    BOVADA: "bovada",
+    SBP: "sharp_book_price",
+    BKM: "bookmaker",
+    BLY: "bally_bet",
+    RIV: "betrivers",
+    SIN: "sin_book",
+    PRX: "prx",
+    B365: "bet365",
+    BET365: "bet365",
+    HRK: "__skip__",
+    HARDROCK: "__skip__",
   };
+  if (m[norm] === "__skip__") return null;
   if (m[norm]) return m[norm];
   if (/^[A-Z]{2,6}$/.test(norm)) return `bpp_${norm.toLowerCase()}`;
   return null;
@@ -211,6 +230,14 @@ function parseBppWinPctFromTd(tdHtml) {
   return Number(mm[1]) / 100;
 }
 
+/** First Δ column after CS* in Positive-EV table (vig vs consensus), as fraction e.g. 0.078 for 7.8%. */
+function parseDeltaVigFromTd(tdHtml) {
+  const tx = htmlText(tdHtml);
+  const mm = tx.match(/(-?[0-9]+(?:\.[0-9]+)?)\s*%/);
+  if (!mm) return NaN;
+  return Number(mm[1]) / 100;
+}
+
 function playerNameFromCell(htmlCell) {
   const nf = htmlCell.match(/<span[^>]*class="[^"]*name-full[^"]*"[^>]*>([^<]+)<\/span>/);
   if (nf?.[1]?.trim()) return nf[1].trim();
@@ -239,6 +266,7 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
   let winColIdx = -1;
   let bpOddsColIdx = -1;
   let oppColIdx = -1;
+  let deltaVigColIdx = -1;
   if (theadM) {
     const thHits = matchAll(/<th[^>]*>([\s\S]*?)<\/th>/g, theadM[1]);
     const thTxt = thHits.map((h) =>
@@ -255,6 +283,19 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
       if (thTxt[i] === "BP" && bpOddsColIdx < 0) bpOddsColIdx = i;
     }
     if (hits.length) csColIdx = hits[hits.length - 1];
+    for (let i = 0; i < thTxt.length; i++) {
+      const raw = htmlText(thHits[i]?.[1] ?? "");
+      const rawU = raw.replace(/\s+/g, "");
+      const isDelta =
+        rawU === "Δ" ||
+        rawU === "\u0394" ||
+        thTxt[i] === "\u0394" ||
+        /^(DELTA|&DELTA;)$/i.test(rawU.replace(/[^A-Z&;]/gi, ""));
+      if (isDelta && csColIdx >= 0 && i > csColIdx) {
+        deltaVigColIdx = i;
+        break;
+      }
+    }
   }
   const tbodyM = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/);
   if (!tbodyM) return [];
@@ -352,6 +393,7 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
       bp_price: Number.isFinite(bpPrice) ? bpPrice : null,
       consensus_win_prob: win,
       cs_star: csStar,
+      delta_prob_consensus_vig: Number.isFinite(deltaVig) ? deltaVig : null,
     });
   }
   return out;
@@ -441,7 +483,6 @@ export async function fetchBallparkPalOddsFlat(opts = {}) {
   }
 
   let flat = [...t0.flat, ...t1r.flat];
-  flat = flat.filter((r) => TARGET_BOOKS.includes(r.bookmaker_key));
   flat = dedupeRows(flat);
 
   const maxRows = envInt("MLB_SCANNER_MAX_ODDS_ROWS", envInt("MLB_SHINY_MAX_ODDS_ROWS", 0));
@@ -483,6 +524,25 @@ export function buildEvTableBpp(rows, opts = {}) {
   const kellyFrac = envNum("MLB_SCANNER_KELLY_FRACTION", envNum("MLB_SHINY_KELLY_FRACTION", 0.25));
   const devigMethod = String(opts.devigMethod ?? "multiplicative");
   const devigSource = String(opts.devigSource ?? "ALL");
+
+  /** @type {Record<string, number>|null} */
+  let devigWeightNorm = null;
+  const dwRaw = opts.devigWeights;
+  if (dwRaw && typeof dwRaw === "object" && !Array.isArray(dwRaw)) {
+    const acc = {};
+    let sum = 0;
+    for (const [bk, w0] of Object.entries(dwRaw)) {
+      const w = Number(w0);
+      if (!Number.isFinite(w) || w <= 0) continue;
+      const ck = canonicalBookKey(bk);
+      acc[ck] = (acc[ck] ?? 0) + w;
+      sum += w;
+    }
+    if (sum > 0) {
+      devigWeightNorm = {};
+      for (const k of Object.keys(acc)) devigWeightNorm[k] = acc[k] / sum;
+    }
+  }
 
   const d = rows.map((r) => ({
     ...r,
@@ -579,9 +639,19 @@ export function buildEvTableBpp(rows, opts = {}) {
     for (const r of rows) {
       const k = [r.event_id, r.game, r.market, r.market_label, r.player, r.line_key, r.side].join("\t");
       if (!m.has(k)) m.set(k, []);
-      m.get(k).push({ fair_prob: r.fair_prob, fair_odds: r.fair_odds });
+      m.get(k).push({
+        fair_prob: r.fair_prob,
+        fair_odds: r.fair_odds,
+        book: canonicalBookKey(r.bookmaker_key),
+      });
     }
     const out = new Map();
+    const bpW =
+      devigWeightNorm && Number.isFinite(Number(devigWeightNorm.__bp_model__))
+        ? Number(devigWeightNorm.__bp_model__)
+        : devigWeightNorm
+          ? 0
+          : 1;
     for (const [k, arr] of m) {
       const parts = k.split("\t");
       if (parts.length >= 7) {
@@ -598,13 +668,38 @@ export function buildEvTableBpp(rows, opts = {}) {
             const fp = side === "over" ? fO : fU;
             if (Number.isFinite(fp)) {
               const fairProb = Math.min(0.98, Math.max(0.02, fp));
-              arr.push({ fair_prob: fairProb, fair_odds: probToAmerican(fairProb) });
+              arr.push({
+                fair_prob: fairProb,
+                fair_odds: probToAmerican(fairProb),
+                book: "__bp_model__",
+              });
             }
           }
         }
       }
-      const medProb = median(arr.map((x) => x.fair_prob));
-      const medOdds = median(arr.map((x) => x.fair_odds));
+      let medProb;
+      let medOdds;
+      if (devigWeightNorm) {
+        let sumW = 0;
+        let sumP = 0;
+        for (const x of arr) {
+          let w = devigWeightNorm[x.book];
+          if (x.book === "__bp_model__") w = bpW;
+          if (w == null || !Number.isFinite(w) || w <= 0) continue;
+          sumW += w;
+          sumP += x.fair_prob * w;
+        }
+        if (sumW > 0) {
+          medProb = sumP / sumW;
+          medOdds = probToAmerican(medProb);
+        } else {
+          medProb = median(arr.map((x) => x.fair_prob));
+          medOdds = median(arr.map((x) => x.fair_odds));
+        }
+      } else {
+        medProb = median(arr.map((x) => x.fair_prob));
+        medOdds = median(arr.map((x) => x.fair_odds));
+      }
       if (!Number.isFinite(medProb) || !Number.isFinite(medOdds)) continue;
       out.set(k, { fair_prob: medProb, fair_odds: Math.round(medOdds) });
     }
@@ -701,6 +796,14 @@ export function buildEvTableBpp(rows, opts = {}) {
       bp_fmt: bpFmt,
       ev_pct: evPct,
       cs_star: Number.isFinite(bp.cs_star) ? bp.cs_star : null,
+      delta_prob_consensus_vig:
+        bp.delta_prob_consensus_vig != null && Number.isFinite(Number(bp.delta_prob_consensus_vig))
+          ? Number(bp.delta_prob_consensus_vig)
+          : null,
+      delta_vig_fmt:
+        bp.delta_prob_consensus_vig != null && Number.isFinite(Number(bp.delta_prob_consensus_vig))
+          ? `${(Number(bp.delta_prob_consensus_vig) * 100).toFixed(1)}%`
+          : "—",
       kelly_fmt:
         !Number.isFinite(kelly) || bankroll <= 0 ? "—" : kelly <= 0 ? "$0" : `$${kelly.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`,
       books: { ...(gridMap.get(gk) ?? {}) },

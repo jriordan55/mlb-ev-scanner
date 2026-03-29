@@ -89,7 +89,7 @@ body {
 }
 
 .pill-odds-range {
-  min-width: 148px;
+  min-width: 168px;
 }
 
 .pill-row-inline {
@@ -251,18 +251,6 @@ body {
 .best-logo-wrap {
   display: inline-flex;
   flex-shrink: 0;
-}
-
-.th-mini {
-  margin-top: 4px;
-  font-size: 9px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 0;
-  background: #2a3442;
-  color: #c9d9f2;
-  cursor: pointer;
-  font-weight: 600;
 }
 
 .bh-stack {

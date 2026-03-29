@@ -842,6 +842,19 @@ export function buildEvTableBpp(rows, opts = {}) {
     const bpModel = bpByGrid.get(gk);
     const bpFmt = bpModel != null && Number.isFinite(bpModel) ? fmtAmerican(bpModel) : "—";
 
+    /** Δ: implied prob at best price minus median implied prob across all books (each side’s American line, with vig). */
+    const bookOddsMap = gridMap.get(gk) ?? {};
+    const priceList = Object.values(bookOddsMap).filter((x) => Number.isFinite(Number(x)));
+    const impliedList = priceList.map((px) => toProb(px)).filter(Number.isFinite);
+    let deltaProbConsensusVig = NaN;
+    if (impliedList.length >= 2) {
+      const pMed = median(impliedList);
+      const pBest = toProb(bestPrice);
+      if (Number.isFinite(pMed) && Number.isFinite(pBest)) {
+        deltaProbConsensusVig = pBest - pMed;
+      }
+    }
+
     out.push({
       event_id: bp.event_id,
       game: bp.game,
@@ -864,14 +877,10 @@ export function buildEvTableBpp(rows, opts = {}) {
       bp_fmt: bpFmt,
       ev_pct: evPct,
       cs_star: Number.isFinite(bp.cs_star) ? bp.cs_star : null,
-      delta_prob_consensus_vig:
-        bp.delta_prob_consensus_vig != null && Number.isFinite(Number(bp.delta_prob_consensus_vig))
-          ? Number(bp.delta_prob_consensus_vig)
-          : null,
-      delta_vig_fmt:
-        bp.delta_prob_consensus_vig != null && Number.isFinite(Number(bp.delta_prob_consensus_vig))
-          ? `${(Number(bp.delta_prob_consensus_vig) * 100).toFixed(1)}%`
-          : "—",
+      delta_prob_consensus_vig: Number.isFinite(deltaProbConsensusVig) ? deltaProbConsensusVig : null,
+      delta_vig_fmt: Number.isFinite(deltaProbConsensusVig)
+        ? `${(deltaProbConsensusVig * 100).toFixed(1)}%`
+        : "—",
       kelly_fmt:
         !Number.isFinite(kelly) || bankroll <= 0 ? "—" : kelly <= 0 ? "$0" : `$${kelly.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`,
       books: { ...(gridMap.get(gk) ?? {}) },

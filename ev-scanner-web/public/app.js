@@ -93,7 +93,6 @@ const LS_DEVIG_W = "ev_devig_weights";
 const LS_DEVIG_BOOKS = "ev_devig_books";
 const LS_DEVIG_SOURCE = "ev_devig_source";
 const LS_DEVIG_METHOD = "ev_devig_method";
-const LS_HIDE_ODDS = "ev_hide_best_odds";
 
 const BP_FAV_DOMAIN = "ballparkpal.com";
 const MLB_LOGO_ABBR = { ATH: "oak", WSH: "wsh", SFG: "sf", TBR: "tb", KCR: "kc" };
@@ -366,9 +365,9 @@ function scanUrl(opts = {}) {
   return o ? `${o}${path}` : path;
 }
 
-function getImpliedPctFilterBounds() {
-  const minEl = document.getElementById("oddsImpMin");
-  const maxEl = document.getElementById("oddsImpMax");
+function getAmericanOddsFilterBounds() {
+  const minEl = document.getElementById("oddsAmMin");
+  const maxEl = document.getElementById("oddsAmMax");
   const rawMin = String(minEl?.value ?? "").trim();
   const rawMax = String(maxEl?.value ?? "").trim();
   let lo = rawMin === "" ? NaN : Number.parseFloat(rawMin);
@@ -398,15 +397,15 @@ function applyFilters(rows) {
   if (bb && bb !== "All") out = out.filter((r) => r.best_book_key === bb);
 
   const boostPct = resolveBoostProfitPct(g("boostMode")?.value, g("boostCustomPct")?.value);
-  const { lo, hi } = getImpliedPctFilterBounds();
+  const { lo, hi } = getAmericanOddsFilterBounds();
   if (Number.isFinite(lo) || Number.isFinite(hi)) {
     out = out.filter((r) => {
       const eff =
         boostPct > 0 ? applyProfitBoostAmerican(r.best_price, boostPct) : r.best_price;
-      const imp = toProbAmerican(eff) * 100;
-      if (!Number.isFinite(imp)) return false;
-      if (Number.isFinite(lo) && imp < lo) return false;
-      if (Number.isFinite(hi) && imp > hi) return false;
+      const am = Math.round(Number(eff));
+      if (!Number.isFinite(am)) return false;
+      if (Number.isFinite(lo) && am < lo) return false;
+      if (Number.isFinite(hi) && am > hi) return false;
       return true;
     });
   }
@@ -729,20 +728,8 @@ function matchupCell(game) {
   return `<td class="td-matchup"><span class="matchup-logos"><img src="${ua}" alt="" width="22" height="22" loading="lazy" decoding="async"/><span class="at">@</span><img src="${ub}" alt="" width="22" height="22" loading="lazy" decoding="async"/></span></td>`;
 }
 
-function hideBestOddsEnabled() {
-  return localStorage.getItem(LS_HIDE_ODDS) === "1";
-}
-
-function syncToggleOddsButton() {
-  const btn = document.getElementById("toggleBestOdds");
-  if (!btn) return;
-  const on = hideBestOddsEnabled();
-  btn.textContent = on ? "+ Show odds" : "− Hide odds";
-}
-
 function render(rows, bankroll, books) {
   const tb = document.getElementById("tbody");
-  const hideOdds = hideBestOddsEnabled();
   const boostPct = resolveBoostProfitPct(
     document.getElementById("boostMode")?.value,
     document.getElementById("boostCustomPct")?.value,
@@ -784,8 +771,7 @@ function render(rows, bankroll, books) {
     const bestImg = dom
       ? `<img class="best-book-logo" src="${esc(favUrl(dom))}" alt="" width="20" height="20" onerror="this.style.display='none'"/>`
       : "";
-    const oddsPart =
-      !hideOdds && bestPriceStr ? `<span class="best-odds-txt">${esc(bestPriceStr)}</span>` : "";
+    const oddsPart = bestPriceStr ? `<span class="best-odds-txt">${esc(bestPriceStr)}</span>` : "";
     const bestBookInner =
       oddsPart || bestImg
         ? `<div class="td-best-inner">${oddsPart}${bestImg ? `<span class="best-logo-wrap">${bestImg}</span>` : ""}</div>`
@@ -1031,13 +1017,6 @@ document.getElementById("devigPreloads")?.addEventListener("click", () => {
   document.getElementById("devigSplitPresets")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
-document.getElementById("toggleBestOdds")?.addEventListener("click", () => {
-  const on = localStorage.getItem(LS_HIDE_ODDS) === "1";
-  localStorage.setItem(LS_HIDE_ODDS, on ? "" : "1");
-  syncToggleOddsButton();
-  redraw();
-});
-
 const reloadScan = debounce(() => load(), 350);
 ["devigMethod", "devigBooks", "devigSource"].forEach((id) => {
   document.getElementById(id)?.addEventListener("change", () => reloadScan());
@@ -1059,10 +1038,9 @@ document.getElementById("boostMode")?.addEventListener("change", () => {
 
 document.getElementById("boostCustomPct")?.addEventListener("input", debounce(() => redraw(), 200));
 
-document.getElementById("oddsImpMin")?.addEventListener("input", debounce(() => redraw(), 200));
-document.getElementById("oddsImpMax")?.addEventListener("input", debounce(() => redraw(), 200));
+document.getElementById("oddsAmMin")?.addEventListener("input", debounce(() => redraw(), 200));
+document.getElementById("oddsAmMax")?.addEventListener("input", debounce(() => redraw(), 200));
 
-syncToggleOddsButton();
 restoreDevigUiFromStorage();
 
 document.querySelector("#grid thead")?.addEventListener("click", (e) => {

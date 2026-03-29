@@ -34,12 +34,12 @@
     <label class="pill">Game
       <select id="game"></select>
     </label>
-    <label class="pill pill-odds-range" title="Filter by implied win probability at the best price (after boost). Higher % = shorter odds / more “certain” from the book’s view. Leave blank for no limit.">
-      Implied % (best)
+    <label class="pill pill-odds-range" title="Filter by American odds at the best price (after boost). Favorites are negative (e.g. -150), underdogs positive (e.g. +220). Leave blank for no limit. Range is numeric: -200 is below -120.">
+      American odds (best)
       <span class="pill-row-inline">
-        <input type="number" id="oddsImpMin" placeholder="Min" min="0" max="100" step="0.1" />
-        <span class="pill-dash" aria-hidden="true">–</span>
-        <input type="number" id="oddsImpMax" placeholder="Max" min="0" max="100" step="0.1" />
+        <input type="number" id="oddsAmMin" placeholder="-200" step="1" />
+        <span class="pill-dash" aria-hidden="true">to</span>
+        <input type="number" id="oddsAmMax" placeholder="+250" step="1" />
       </span>
     </label>
     <label class="pill">Bankroll ($)
@@ -70,7 +70,7 @@
         <tr>
           <th class="col-pin col-pin-1 sortable" data-sort="ev" title="Click to sort">EV %</th>
           <th class="col-pin col-pin-2 sortable" data-sort="kelly" title="Click to sort">Kelly</th>
-          <th class="col-pin col-pin-3 sortable" data-sort="best" title="Click to sort (not the odds toggle)">Best book<br /><button type="button" class="th-mini" id="toggleBestOdds" title="Show or hide American odds next to the book logo">− Hide odds</button></th>
+          <th class="col-pin col-pin-3 sortable" data-sort="best" title="Click to sort">Best book</th>
           <th class="col-pin col-pin-4 sortable" data-sort="player" title="Click to sort">Player</th>
           <th class="sortable" data-sort="line" title="Click to sort">Line</th>
           <th class="sortable" data-sort="fair" title="Click to sort">Fair</th>
@@ -158,28 +158,25 @@
     <form method="dialog">
       <h2>How this works</h2>
       <div class="help-body">
-        <p>The scanner compares each prop’s <strong>fair price</strong>—the price that would reflect win odds with the sportsbook margin removed—to the price available to bet. When fair probability supports a better payout than the line you can take, the opportunity is flagged as positive expected value (+EV).</p>
-
-        <h3>Market</h3>
-        <p>Loads every supported category in one request from <a href="https://www.ballparkpal.com/Positive-EV.php" target="_blank" rel="noopener">Positive EV</a> (<code>BetMarket=0</code>). This dropdown only filters the table in your browser—changing it does not refetch. Game/team moneyline, game total, 1st-inning runs, team totals, batter doubles/triples, and pitcher-to-record-win rows are excluded.</p>
+        <p>The scanner compares each prop’s <strong>fair price</strong> (the price that would reflect win odds with the sportsbook margin removed) to the price available to bet. When fair probability supports a better payout than the line you can take, the opportunity is flagged as positive expected value (+EV).</p>
 
         <h3>Devig method</h3>
-        <p>Each side of a two-way market carries an implied win probability; together they exceed 100% because of the book’s hold. Removing that hold—<strong>devigging</strong>—produces fair win chances for each side. The method you select determines how that adjustment is performed. Results are expressed as fair American odds and drive Expected Value.</p>
+        <p>Each side of a two way market carries an implied win probability; together they exceed 100% because of the book’s hold. Removing that hold (<strong>devigging</strong>) produces fair win chances for each side. The method you select determines how that adjustment is performed. Results are expressed as fair American odds and drive Expected Value.</p>
         <ul>
-          <li><strong>Multiplicative</strong> — Scales both implied probabilities down proportionally so they sum to 100%. The relative shape of the market is preserved; this approach is standard and straightforward to interpret.</li>
-          <li><strong>Additive</strong> — Estimates total overround, subtracts half from each side’s implied probability, then renormalizes. Delivers a symmetric response to the book’s margin.</li>
-          <li><strong>Probit</strong> — Maps implied probabilities through the normal distribution, applies a symmetric adjustment, and maps back.</li>
-          <li><strong>Shin</strong> — Applies a Shin-style (Zangwill) correction so adjusted probabilities respect the posted market shape while summing to 100%.</li>
-          <li><strong>Power</strong> — Raises each implied probability to a calibrated power until the pair sums to 100%.</li>
-          <li><strong>Worst case</strong> — Evaluates multiple reasonable fair probabilities and uses the one that gives your side the least edge.</li>
-          <li><strong>Average</strong> — Computes fair probabilities under several methods, then averages the fair probability for the side you are analyzing.</li>
+          <li><strong>Multiplicative:</strong> Scales both implied probabilities down proportionally so they sum to 100%. The relative shape of the market is preserved; this approach is standard and straightforward to interpret.</li>
+          <li><strong>Additive:</strong> Estimates total overround, subtracts half from each side’s implied probability, then renormalizes. Delivers a symmetric response to the book’s margin.</li>
+          <li><strong>Probit:</strong> Maps implied probabilities through the normal distribution, applies a symmetric adjustment, and maps back.</li>
+          <li><strong>Shin:</strong> Applies a Shin style (Zangwill) correction so adjusted probabilities respect the posted market shape while summing to 100%.</li>
+          <li><strong>Power:</strong> Raises each implied probability to a calibrated power until the pair sums to 100%.</li>
+          <li><strong>Worst case:</strong> Evaluates multiple reasonable fair probabilities and uses the one that gives your side the least edge.</li>
+          <li><strong>Average:</strong> Computes fair probabilities under several methods, then averages the fair probability for the side you are analyzing.</li>
         </ul>
 
         <h3>Best book</h3>
         <p>When set to a specific sportsbook, the main table only lists props where that book posts the best price for the line. <strong>All rows</strong> shows every prop that passes the other filters, regardless of which book is best.</p>
 
-        <h3>Two-way devig prices from</h3>
-        <p>Restricts which sportsbooks supply the over/under pairs used in devigging. Consensus weights (split / 100% / market avg) are configured separately in the same modal.</p>
+        <h3>Two way devig prices from</h3>
+        <p>Restricts which sportsbooks supply the over and under pairs used in devigging. Consensus weights (split, 100%, market avg) are configured separately in the same modal.</p>
 
         <h3>O/U</h3>
         <p>Filters to overs only, unders only, or both.</p>
@@ -187,41 +184,40 @@
         <h3>Game</h3>
         <p>Limits the view to one matchup or shows the full slate.</p>
 
+        <h3>American odds (best)</h3>
+        <p>Keeps rows where the effective <strong>best price</strong> in American odds (including any profit boost) falls between your min and max. Favorites use negative numbers; underdogs use positive. Comparison is numeric, so for example -200 is less than -120. Leave either box blank for no bound on that side.</p>
+
         <h3>Ballpark Pal park factors (table columns)</h3>
         <p>The <strong>HR</strong>, <strong>2B/3B</strong>, <strong>1B</strong>, and <strong>Runs</strong> columns show combined effect park factors from <a href="https://www.ballparkpal.com/" target="_blank" rel="noopener">Ballpark Pal</a>, matched to each game on your board. They are informational context for the slate, not inputs to the EV math in this app.</p>
-        <p><strong>Model and data:</strong> Ballpark Pal describes these as coming from a machine-learning model trained on a very large set of batted balls and games, with the goal of isolating how stadium and weather interact at each venue.</p>
-        <p><strong>How to read the numbers:</strong> The percentages are expressed relative to the league-wide MLB average for the season—not relative to that park’s own long-run baseline.</p>
+        <p><strong>Model and data:</strong> Ballpark Pal describes these as coming from a machine learning model trained on a very large set of batted balls and games, with the goal of isolating how stadium and weather interact at each venue.</p>
+        <p><strong>How to read the numbers:</strong> The percentages are expressed relative to the league wide MLB average for the season, not relative to that park’s own long run baseline.</p>
         <p><strong>Caveat:</strong> Park effects are small and noisy in any one game. Treat these columns as context, not a guarantee.</p>
 
         <h3>Bankroll ($)</h3>
         <p>Converts the Kelly stake from a fraction of bankroll into dollars in the Kelly column. Filter logic and line selection are unchanged.</p>
 
         <h3>Boost</h3>
-        <p>When a profit boost (or similar promo) increases winnings on a winning ticket, pick the level so <strong>EV %</strong>, <strong>Kelly</strong>, and <strong>Implied</strong> use the boosted payout. Fair value stays the pre-promotion benchmark from the market. No Sweat is approximated for modeling.</p>
-
-        <h3>Historical ROI</h3>
-        <p>Summary cards (if enabled) draw on your archived results file. They respect Market, Devig method, and Best book when those filters are set.</p>
+        <p>When a profit boost (or similar promo) increases winnings on a winning ticket, pick the level so <strong>EV %</strong>, <strong>Kelly</strong>, and <strong>Implied</strong> use the boosted payout. Fair value stays the benchmark from the market before any promotion. No Sweat is approximated for modeling.</p>
 
         <h3>Main table</h3>
         <ul>
           <li><strong>Expected Value:</strong> Modeled edge versus fair, in percent, at the effective best price (including any boost).</li>
-          <li><strong>Kelly:</strong> Full-Kelly dollar suggestion for the stated bankroll—illustrative sizing only.</li>
+          <li><strong>Kelly:</strong> Full Kelly dollar suggestion for the stated bankroll; illustrative sizing only.</li>
           <li><strong>Best book:</strong> Operator posting the top price for that line; odds can be hidden with the header toggle.</li>
           <li><strong>Player, Line, Prop, O/U:</strong> Participant, threshold, market label, and side.</li>
           <li><strong>Fair:</strong> Fair American odds after devig; excludes promotions.</li>
-          <li><strong>CS*:</strong> Ballpark Pal consensus (American odds) from the source page.</li>
+          <li><strong>Consensus:</strong> Average odds of the market. Shown in the table as CS*.</li>
           <li><strong>Implied:</strong> Win probability implied by the price used for that row, after boost if applicable.</li>
           <li><strong>Δ:</strong> The probability delta between the outlier book and the market consensus (with vig), when present on the Ballpark Pal table.</li>
-          <li><strong>Matchup / park columns:</strong> Teams and Ballpark Pal combined-effect park factors.</li>
-          <li>Additional columns list each book’s price for side-by-side comparison.</li>
+          <li><strong>Matchup and park columns:</strong> Teams and Ballpark Pal combined effect park factors.</li>
+          <li>Additional columns list each book’s price for side by side comparison.</li>
         </ul>
-        <p>Odds come from <a href="https://www.ballparkpal.com/Positive-EV.php" target="_blank" rel="noopener">Positive EV</a> (all markets per day). Rows need at least two books on the same line (server default). Optional: set <code>MLB_SCANNER_ODDS_SCREEN=1</code> to also merge <a href="https://www.ballparkpal.com/Odds-Screen.php" target="_blank" rel="noopener">Odds Screen</a> (much slower).</p>
       </div>
       <button value="ok" class="top-btn">Close</button>
     </form>
   </dialog>
 
-  <script src="/app.js?v=20260339" type="module"></script>
+  <script src="/app.js?v=20260341" type="module"></script>
   <script>
     setTimeout(function () {
       var s = document.getElementById("status");

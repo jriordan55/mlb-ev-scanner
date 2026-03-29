@@ -147,6 +147,42 @@ function calcEvPct(fairProb, priceAmerican) {
   return Math.abs(ev) < 0.005 ? 0 : ev;
 }
 
+function americanToDecimal(american) {
+  const a = Number(american);
+  if (!Number.isFinite(a)) return NaN;
+  return a > 0 ? 1 + a / 100 : 1 + 100 / Math.abs(a);
+}
+
+function decimalToAmerican(dec) {
+  let d = Number(dec);
+  if (!Number.isFinite(d)) return NaN;
+  d = Math.max(d, 1.000001);
+  return d >= 2 ? Math.round((d - 1) * 100) : Math.round(-(100 / (d - 1)));
+}
+
+function applyProfitBoostAmerican(american, profitBoostPct) {
+  if (!Number.isFinite(profitBoostPct) || profitBoostPct <= 0) return american;
+  const a = Number(american);
+  if (!Number.isFinite(a)) return american;
+  const dec = americanToDecimal(a);
+  if (!Number.isFinite(dec)) return american;
+  const profit = dec - 1;
+  const newDec = 1 + profit * (1 + profitBoostPct / 100);
+  return decimalToAmerican(newDec);
+}
+
+function resolveBoostProfitPct(mode, customPct) {
+  const m = String(mode ?? "none");
+  if (!m || m === "none") return 0;
+  if (m === "no_sweat") return 25;
+  if (m === "custom") {
+    const x = Number.parseFloat(customPct);
+    return Number.isFinite(x) ? Math.max(0, Math.min(300, x)) : 0;
+  }
+  const n = Number.parseFloat(m);
+  return Number.isFinite(n) ? Math.max(0, Math.min(300, n)) : 0;
+}
+
 let lastData = null;
 /** Ignore stale /api/scan responses when devig controls fire another load quickly. */
 let loadSeq = 0;
@@ -201,7 +237,7 @@ function scanUrl(opts = {}) {
   }
   p.set("devigSource", document.getElementById("devigSource")?.value || "ALL");
   const mk = document.getElementById("market")?.value || "All";
-  p.set("market", mk === "All" ? "All" : mk);
+  p.set("market", mk);
   const qs = p.toString();
   const path = `/api/scan${qs ? `?${qs}` : ""}`;
   const o = apiOrigin();
@@ -419,6 +455,10 @@ function syncToggleOddsButton() {
 function render(rows, bankroll, books) {
   const tb = document.getElementById("tbody");
   const hideOdds = hideBestOddsEnabled();
+  const boostPct = resolveBoostProfitPct(
+    document.getElementById("boostMode")?.value,
+    document.getElementById("boostCustomPct")?.value,
+  );
   if (!rows?.length) {
     const st = lastData?.stats;
     const hint =
@@ -434,21 +474,23 @@ function render(rows, bankroll, books) {
   const frag = document.createDocumentFragment();
   for (const r of rows) {
     const tr = document.createElement("tr");
-    const evNum = calcEvPct(r.fair_prob, r.best_price);
+    const effBest =
+      boostPct > 0 ? applyProfitBoostAmerican(r.best_price, boostPct) : r.best_price;
+    const evNum = calcEvPct(r.fair_prob, effBest);
     const evc = evClass(evNum);
     let cs = "";
     if (r.cs_star != null && Number.isFinite(Number(r.cs_star))) {
       const n = Math.round(Number(r.cs_star));
       cs = n > 0 ? `+${n}` : String(n);
     }
-    const kellyRaw = formatKelly(r.fair_prob, r.best_price, bankroll);
+    const kellyRaw = formatKelly(r.fair_prob, effBest, bankroll);
     const kelly = cellDashBlank(kellyRaw);
     const bestAbbr = keyToAbbr[r.best_book_key] || "";
     const dom = FAVICON[r.best_book_key] || "";
 
-    const tp = toProbAmerican(r.best_price);
+    const tp = toProbAmerican(effBest);
     const impliedFmt = Number.isFinite(tp) ? `${(tp * 100).toFixed(1)}%` : "";
-    const bestPriceStr = cellAmerican(r.best_price);
+    const bestPriceStr = cellAmerican(effBest);
     const evStr = Number.isFinite(evNum) ? `${evNum.toFixed(2)}%` : "";
     const fairDisp = cellDashBlank(r.fair_fmt);
     const bestImg = dom
@@ -605,9 +647,18 @@ const reloadScan = debounce(() => load(), 350);
 ["game", "ou", "bestBook"].forEach((id) => {
   document.getElementById(id)?.addEventListener("change", () => redraw());
 });
-document.getElementById("market")?.addEventListener("change", () => reloadScan());
+document.getElementById("market")?.addEventListener("change", () => redraw());
 
 document.getElementById("bankroll")?.addEventListener("input", debounce(() => redraw(), 200));
+
+document.getElementById("boostMode")?.addEventListener("change", () => {
+  const custom = document.getElementById("boostMode")?.value === "custom";
+  const w = document.getElementById("boostCustomWrap");
+  if (w) w.hidden = !custom;
+  redraw();
+});
+
+document.getElementById("boostCustomPct")?.addEventListener("input", debounce(() => redraw(), 200));
 
 syncToggleOddsButton();
 load();

@@ -9,6 +9,7 @@ import {
   SKIPPED_BOOK_KEYS,
   BOOK_ABBR_UPPER,
   BOOK_DISPLAY,
+  EXCLUDED_BPP_MARKET_KEYS,
 } from "./constants.mjs";
 import { buildEvTableBpp, dedupeRows, fmtAmerican, calcEvPct, toProb } from "./bpp.mjs";
 
@@ -357,7 +358,7 @@ export async function buildOddsScreenPriceMap(fetchKeys, allowedGamesByDate) {
         const rec = parseOddsScreenDataRow(inner, slotBooks);
         if (!rec) continue;
         if (!allowed.has(rec.game)) continue;
-        const mk = mergeRowKey(market, side, rec.player, rec.line, rec.game);
+        const mk = mergeRowKey(dateStr, market, side, rec.player, rec.line, rec.game);
         const prev = map.get(mk) ?? { bp_price: NaN, prices: {} };
         if (Number.isFinite(rec.bp_price)) prev.bp_price = rec.bp_price;
         for (const [bk, pr] of Object.entries(rec.prices)) {
@@ -385,7 +386,7 @@ export async function buildOddsScreenPriceMap(fetchKeys, allowedGamesByDate) {
 
 export function collectOddsScreenFetchKeys(_flat, allowedGamesByDate) {
   const keys = new Set();
-  const markets = Object.keys(MARKET_KEY_TO_BET_ID);
+  const markets = Object.keys(MARKET_KEY_TO_BET_ID).filter((k) => !EXCLUDED_BPP_MARKET_KEYS.has(k));
   for (const [dateStr, games] of allowedGamesByDate) {
     if (!games?.size) continue;
     for (const market of markets) {
@@ -526,7 +527,7 @@ export function applyOddsScreenToEvRows(evRows, priceMap) {
  * Recompute +EV rows to get the pre-game slate, fetch Odds-Screen for those games only, overlay prices.
  */
 export async function mergeOddsScreenPrices(flat, buildOpts) {
-  if (process.env.MLB_SCANNER_ODDS_SCREEN === "0") {
+  if (process.env.MLB_SCANNER_ODDS_SCREEN !== "1") {
     return { flat, stats: {}, priceMap: null };
   }
   if (!flat.length) return { flat, stats: {}, priceMap: null };

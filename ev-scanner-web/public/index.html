@@ -84,6 +84,21 @@
     <label class="pill">Bankroll ($)
       <input type="number" id="bankroll" value="1000" min="0" step="50" />
     </label>
+    <label class="pill prop-pill">Boost
+      <select id="boostMode">
+        <option value="none">None</option>
+        <option value="10">10%</option>
+        <option value="20">20%</option>
+        <option value="25">25%</option>
+        <option value="30">30%</option>
+        <option value="50">50%</option>
+        <option value="no_sweat">No Sweat (~25%)</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </label>
+    <label class="pill small" id="boostCustomWrap" hidden>Boost %
+      <input type="number" id="boostCustomPct" value="25" min="0" max="300" step="1" />
+    </label>
   </div>
 
   <p class="status" id="status">Loading…</p>
@@ -138,7 +153,7 @@
         <p>The scanner compares each prop’s <strong>fair price</strong>—the price that would reflect win odds with the sportsbook margin removed—to the price available to bet. When fair probability supports a better payout than the line you can take, the opportunity is flagged as positive expected value (+EV).</p>
 
         <h3>Market</h3>
-        <p>Restricts the board to a single prop category (for example hits, home runs, or strikeouts) or leaves all categories visible.</p>
+        <p>Loads every supported category in one request from <a href="https://www.ballparkpal.com/Positive-EV.php" target="_blank" rel="noopener">Positive EV</a> (<code>BetMarket=0</code>). This dropdown only filters the table in your browser—changing it does not refetch. Game/team moneyline, game total, 1st-inning runs, team totals, batter doubles/triples, and pitcher-to-record-win rows are excluded.</p>
 
         <h3>Devig method</h3>
         <p>Each side of a two-way market carries an implied win probability; together they exceed 100% because of the book’s hold. Removing that hold—<strong>devigging</strong>—produces fair win chances for each side. The method you select determines how that adjustment is performed. Results are expressed as fair American odds and drive Expected Value.</p>
@@ -173,29 +188,32 @@
         <h3>Bankroll ($)</h3>
         <p>Converts the Kelly stake from a fraction of bankroll into dollars in the Kelly column. Filter logic and line selection are unchanged.</p>
 
+        <h3>Boost</h3>
+        <p>When a profit boost (or similar promo) increases winnings on a winning ticket, pick the level so <strong>EV %</strong>, <strong>Kelly</strong>, and <strong>Implied</strong> use the boosted payout. Fair value stays the pre-promotion benchmark from the market. No Sweat is approximated for modeling.</p>
+
         <h3>Historical ROI</h3>
         <p>Summary cards (if enabled) draw on your archived results file. They respect Market, Devig method, and Best book when those filters are set.</p>
 
         <h3>Main table</h3>
         <ul>
-          <li><strong>Expected Value:</strong> Modeled edge versus fair, in percent, at the best posted price.</li>
+          <li><strong>Expected Value:</strong> Modeled edge versus fair, in percent, at the effective best price (including any boost).</li>
           <li><strong>Kelly:</strong> Full-Kelly dollar suggestion for the stated bankroll—illustrative sizing only.</li>
           <li><strong>Best book:</strong> Operator posting the top price for that line; odds can be hidden with the header toggle.</li>
           <li><strong>Player, Line, Prop, O/U:</strong> Participant, threshold, market label, and side.</li>
           <li><strong>Fair:</strong> Fair American odds after devig; excludes promotions.</li>
           <li><strong>CS*:</strong> Ballpark Pal consensus (American odds) from the source page.</li>
-          <li><strong>Implied:</strong> Win probability implied by the best price used for that row.</li>
+          <li><strong>Implied:</strong> Win probability implied by the price used for that row, after boost if applicable.</li>
           <li><strong>Δ (vig):</strong> Probability delta between the outlier book and the market consensus (with vig), when present on the Ballpark Pal table.</li>
           <li><strong>Matchup / park columns:</strong> Teams and Ballpark Pal combined-effect park factors.</li>
           <li>Additional columns list each book’s price for side-by-side comparison.</li>
         </ul>
-        <p>Odds combine <a href="https://www.ballparkpal.com/Positive-EV.php" target="_blank" rel="noopener">Positive EV</a> and <a href="https://www.ballparkpal.com/Odds-Screen.php" target="_blank" rel="noopener">Odds Screen</a> so each sportsbook column can fill from either page. Rows need at least two books on the same line (server default). Set <code>MLB_SCANNER_ODDS_SCREEN=0</code> to use only Positive EV.</p>
+        <p>Odds come from <a href="https://www.ballparkpal.com/Positive-EV.php" target="_blank" rel="noopener">Positive EV</a> (all markets per day). Rows need at least two books on the same line (server default). Optional: set <code>MLB_SCANNER_ODDS_SCREEN=1</code> to also merge <a href="https://www.ballparkpal.com/Odds-Screen.php" target="_blank" rel="noopener">Odds Screen</a> (much slower).</p>
       </div>
       <button value="ok" class="top-btn">Close</button>
     </form>
   </dialog>
 
-  <script src="/app.js?v=20260334" type="module"></script>
+  <script src="/app.js?v=20260336" type="module"></script>
   <script>
     setTimeout(function () {
       var s = document.getElementById("status");

@@ -6,7 +6,7 @@
  *   MLB_SCANNER_BPP_PARALLEL=1 (both days at once; default is sequential),
  *   MLB_SCANNER_MAX_ODDS_ROWS, MLB_SCANNER_MAX_TABLE_ROWS, MLB_SCANNER_PORT,
  *   MLB_SCANNER_SKIP_PARK_FACTORS=1
- *   MLB_SCANNER_ODDS_SCREEN=0 — disable Odds-Screen.php merge (default: on; combines with Positive-EV.php for full book grid).
+ *   MLB_SCANNER_ODDS_SCREEN=1 — also merge Odds-Screen.php (slow; default off — Positive-EV.php only, BetMarket=0 all markets).
  *   MLB_SCANNER_OS_TIMEOUT_SEC (default 45), MLB_SCANNER_OS_DELAY_MS, MLB_SCANNER_OS_PARALLEL=1
  * GET /api/health — quick up-check. GET /api/scan?nocache=1 — bypass server cache.
  */
@@ -22,6 +22,7 @@ import {
   BOOK_ABBR_UPPER,
   MARKET_LABELS,
   BPP_MARKET_KEY_TO_BET_ID,
+  EXCLUDED_BPP_MARKET_KEYS,
 } from "./lib/constants.mjs";
 
 /** Merge server book metadata with any extra `r.books` columns (e.g. after Odds-Screen overlay). */
@@ -150,21 +151,14 @@ function sendFile(res, filePath) {
 /** In-memory short TTL cache for repeat loads (hosting-friendly). Never cache failed/empty fetches. */
 let scanCache = { at: 0, ttlMs: 45_000, payload: null, key: "" };
 
-function resolveBetMarketId(marketKey) {
-  const k = String(marketKey ?? "").trim();
-  if (!k || k === "All") return 0;
-  const id = BPP_MARKET_KEY_TO_BET_ID[k];
-  return Number.isFinite(id) ? id : 0;
-}
-
 async function runScan(skipPf, bypassCache, scanOpts = {}) {
   const now = Date.now();
   const dmk = scanOpts.devigMethod ?? "multiplicative";
   const dbk = scanOpts.devigBooks ?? "ALL";
   const dsk = scanOpts.devigSource ?? "ALL";
   const dwJson = scanOpts.devigWeights ? JSON.stringify(scanOpts.devigWeights) : "";
-  const betMarketId = resolveBetMarketId(scanOpts.betMarket);
-  const cacheKey = `${skipPf}|${dmk}|${dbk}|${dsk}|${betMarketId}|${dwJson}`;
+  const osOn = process.env.MLB_SCANNER_ODDS_SCREEN === "1" ? "1" : "0";
+  const cacheKey = `${skipPf}|${dmk}|${dbk}|${dsk}|${dwJson}|allmkt|os${osOn}`;
   if (
     !bypassCache &&
     scanCache.payload &&
@@ -174,10 +168,10 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
     return scanCache.payload;
   }
 
-  console.error("[mlb-ev] fetching Ballpark Pal… BetMarket=", betMarketId);
-  let { flat, stats } = await fetchBallparkPalOddsFlat({ betMarketId });
+  console.error("[mlb-ev] fetching Ballpark Pal… BetMarket=0 (all markets; client filters Market dropdown)");
+  let { flat, stats } = await fetchBallparkPalOddsFlat({ betMarketId: 0 });
   stats.flat_odds_rows = flat.length;
-  stats.bet_market_id = betMarketId;
+  stats.bet_market_id = 0;
   console.error("[mlb-ev] flat odds rows:", flat.length, "http:", stats.http_status, "html bytes:", stats.raw_html_bytes);
 
   const buildOpts = {
@@ -190,7 +184,7 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
 
   let ev;
   let booksPayload = [];
-  if (process.env.MLB_SCANNER_ODDS_SCREEN !== "0") {
+  if (process.env.MLB_SCANNER_ODDS_SCREEN === "1") {
     const os = await mergeOddsScreenPrices(flat, buildOpts);
     flat = os.flat;
     if (os.stats && Object.keys(os.stats).length) Object.assign(stats, os.stats);
@@ -246,6 +240,16 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
   }
   const booksOut = mergeBooksPayload(ev, booksPayload);
 
+  const uiMarketRaw = String(scanOpts.betMarket ?? "All").trim();
+  const uiMarket =
+    uiMarketRaw === "All" || !BPP_MARKET_KEY_TO_BET_ID[uiMarketRaw] || EXCLUDED_BPP_MARKET_KEYS.has(uiMarketRaw)
+      ? "All"
+      : uiMarketRaw;
+
+  const marketKeys = Object.keys(BPP_MARKET_KEY_TO_BET_ID)
+    .filter((k) => !EXCLUDED_BPP_MARKET_KEYS.has(k))
+    .sort((a, b) => (MARKET_LABELS[a] ?? a).localeCompare(MARKET_LABELS[b] ?? b));
+
   const payload = {
     ok: true,
     fetchedAt: new Date().toISOString(),
@@ -256,18 +260,13 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
     rows: ev,
     books: booksOut,
     devigWeights: normalizeDevigWeightsForDisplay(scanOpts.devigWeights) ?? null,
-    betMarket:
-      betMarketId === 0
-        ? "All"
-        : Object.keys(BPP_MARKET_KEY_TO_BET_ID).find((k) => BPP_MARKET_KEY_TO_BET_ID[k] === betMarketId) ?? "All",
-    marketKeys: Object.keys(BPP_MARKET_KEY_TO_BET_ID).sort((a, b) =>
-      (MARKET_LABELS[a] ?? a).localeCompare(MARKET_LABELS[b] ?? b),
-    ),
+    betMarket: uiMarket,
+    marketKeys,
   };
   payload.stats.devig_method = dmk;
   payload.stats.devig_books = dbk;
   payload.stats.devig_source = dsk;
-  payload.stats.bet_market_id = betMarketId;
+  payload.stats.bet_market_id = 0;
   if (flat.length > 0) {
     scanCache = { at: now, ttlMs: 45_000, key: cacheKey, payload };
   } else {
@@ -307,7 +306,7 @@ const server = http.createServer(async (req, res) => {
       let ds = params.get("devigSource") || "ALL";
       if (ds !== "ALL" && !TARGET_BOOKS.includes(ds)) ds = "ALL";
       let bmk = params.get("market") || "All";
-      if (bmk !== "All" && !BPP_MARKET_KEY_TO_BET_ID[bmk]) bmk = "All";
+      if (bmk !== "All" && (!BPP_MARKET_KEY_TO_BET_ID[bmk] || EXCLUDED_BPP_MARKET_KEYS.has(bmk))) bmk = "All";
       const dw = parseDevigWeightsQuery(params.get("devigWeights"));
       const scanOpts = { devigMethod: dm, devigBooks: db, devigSource: ds, betMarket: bmk, devigWeights: dw };
       const base = await runScan(skipPf, nocache, scanOpts);

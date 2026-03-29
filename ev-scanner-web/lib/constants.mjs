@@ -114,6 +114,20 @@ export const BPP_BETMARKET_MAP = {
   24: "pitcher_outs",
 };
 
+/**
+ * Dropped at parse time (still exist on Ballpark Pal “All markets” HTML).
+ * Moneyline, game/team totals, 1st-inning runs, doubles/triples, pitcher-to-record-win.
+ */
+export const EXCLUDED_BPP_MARKET_KEYS = new Set([
+  "game_moneyline",
+  "game_total_runs",
+  "runs_first_inning",
+  "team_total_runs",
+  "batter_doubles",
+  "batter_triples",
+  "pitcher_record_a_win",
+]);
+
 /** market_key → Positive-EV.php `BetMarket` id (0 = all markets). */
 export const BPP_MARKET_KEY_TO_BET_ID = Object.fromEntries(
   Object.entries(BPP_BETMARKET_MAP).map(([id, key]) => [key, Number(id)]),

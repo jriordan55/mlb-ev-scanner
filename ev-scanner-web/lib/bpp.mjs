@@ -7,6 +7,7 @@ import {
   BOOK_ABBR_UPPER,
   MARKET_LABELS,
   BPP_BETMARKET_MAP,
+  EXCLUDED_BPP_MARKET_KEYS,
   ballparkPairKey,
   normalizeBpMatchupString,
 } from "./constants.mjs";
@@ -193,9 +194,11 @@ function bookLabelForKey(bk) {
 }
 
 function bppMarketTextToKey(t) {
-  const x = String(t ?? "")
+  const raw = String(t ?? "")
     .toLowerCase()
+    .replace(/\s+/g, " ")
     .trim();
+  const x = raw.replace(/^batting\s+/, "").replace(/^pitcher\s+/, "");
   const map = {
     hits: "batter_hits",
     bases: "batter_total_bases",
@@ -208,14 +211,17 @@ function bppMarketTextToKey(t) {
     walks: "batter_walks",
     "stolen bases": "batter_stolen_bases",
     "hits + runs + rbis": "batter_hits_runs_rbis",
-    strikeouts: "pitcher_strikeouts",
+    "h+r+rbi": "batter_hits_runs_rbis",
+    strikeouts: "batter_strikeouts",
+    "pitcher strikeouts": "pitcher_strikeouts",
+    "pitcher walks": "pitcher_walks",
     "earned runs": "pitcher_earned_runs",
     outs: "pitcher_outs",
     "hits allowed": "pitcher_hits_allowed",
     "to record win": "pitcher_record_a_win",
     win: "pitcher_record_a_win",
   };
-  return map[x] ?? null;
+  return map[raw] ?? map[x] ?? null;
 }
 
 function matchAll(re, s) {
@@ -328,6 +334,7 @@ export function parseBallparkPalPositiveEvHtml(html, dateStr) {
     let marketKey = mid ? BPP_BETMARKET_MAP[mid] : null;
     if (!marketKey) marketKey = bppMarketTextToKey(htmlText(cells[3]));
     if (!marketKey) continue;
+    if (EXCLUDED_BPP_MARKET_KEYS.has(marketKey)) continue;
 
     const tm = htmlText(cells[0]).toUpperCase().replace(/\s+/g, " ").trim();
     if (!tm) continue;

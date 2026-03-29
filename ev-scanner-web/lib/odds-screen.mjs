@@ -2,8 +2,14 @@
  * Ballpark Pal Odds-Screen.php — book + BP American odds (per market / side / date).
  * Merged only for games that appear on the +EV table (pre‑game slate proxy).
  */
-import { BALLPARK_PAL_ODDS_SCREEN_URL, BPP_BETMARKET_MAP, TARGET_BOOKS } from "./constants.mjs";
-import { buildEvTableBpp } from "./bpp.mjs";
+import {
+  BALLPARK_PAL_ODDS_SCREEN_URL,
+  BPP_BETMARKET_MAP,
+  TARGET_BOOKS,
+  BOOK_ABBR_UPPER,
+  BOOK_DISPLAY,
+} from "./constants.mjs";
+import { buildEvTableBpp, fmtAmerican, calcEvPct, toProb } from "./bpp.mjs";
 
 function envInt(name, def) {
   const v = Number.parseInt(process.env[name] ?? "", 10);
@@ -332,14 +338,74 @@ export function applyOddsScreenToFlat(flat, priceMap, allowedGamesByDate) {
   return { flat: out, merged_price_cells: merged };
 }
 
+function bookColAbbr(bk) {
+  const k = canonicalBookKey(bk);
+  return BOOK_ABBR_UPPER[k] ?? String(k).toUpperCase().slice(0, 3);
+}
+
+/**
+ * Fill per-row book columns + BP from Odds-Screen map (all six books when present), and refresh best line to max EV among those prices.
+ */
+export function applyOddsScreenToEvRows(evRows, priceMap) {
+  if (!priceMap?.size || !evRows?.length) return evRows;
+  return evRows.map((r) => {
+    const ln = Number(r.line);
+    if (!Number.isFinite(ln)) return r;
+    const mk = mergeRowKey(r.market, r.side, r.player, ln, r.game);
+    const hit = priceMap.get(mk);
+    if (!hit) return r;
+    const books = { ...r.books };
+    for (const bk of TARGET_BOOKS) {
+      const pr = hit.prices[bk];
+      if (Number.isFinite(pr)) books[bookColAbbr(bk)] = pr;
+    }
+    let bp_price = r.bp_price;
+    let bp_fmt = r.bp_fmt;
+    if (Number.isFinite(hit.bp_price)) {
+      bp_price = hit.bp_price;
+      bp_fmt = fmtAmerican(hit.bp_price);
+    }
+    let bestKey = null;
+    let bestPrice = NaN;
+    let bestEv = -Infinity;
+    for (const bk of TARGET_BOOKS) {
+      const col = bookColAbbr(bk);
+      const pr = books[col];
+      if (!Number.isFinite(pr)) continue;
+      const ev = calcEvPct(r.fair_prob, pr);
+      if (Number.isFinite(ev) && ev > bestEv) {
+        bestEv = ev;
+        bestPrice = pr;
+        bestKey = bk;
+      }
+    }
+    if (bestKey == null) {
+      return { ...r, books, bp_price, bp_fmt };
+    }
+    const tp = toProb(bestPrice);
+    const implied_fmt = Number.isFinite(tp) ? `${(tp * 100).toFixed(1)}%` : r.implied_fmt;
+    return {
+      ...r,
+      books,
+      bp_price,
+      bp_fmt,
+      best_price: bestPrice,
+      best_book_key: bestKey,
+      best_book: BOOK_DISPLAY[bestKey] ?? bestKey,
+      best_price_fmt: fmtAmerican(bestPrice),
+      implied_fmt,
+    };
+  });
+}
+
 /**
  * Recompute +EV rows to get the pre-game slate, fetch Odds-Screen for those games only, overlay prices.
  */
 export async function mergeOddsScreenPrices(flat, buildOpts) {
   if (process.env.MLB_SCANNER_ODDS_SCREEN === "0") {
-    return { flat, stats: {} };
+    return { flat, stats: {}, priceMap: null };
   }
-  if (!flat.length) return { flat, stats: {} };
+  if (!flat.length) return { flat, stats: {}, priceMap: null };
 
   const evProbe = buildEvTableBpp(flat, buildOpts);
   const allowed = allowedGamesByDateFromEvRows(evProbe);
@@ -348,6 +414,7 @@ export async function mergeOddsScreenPrices(flat, buildOpts) {
   if (totalAllowedGames === 0) {
     return {
       flat,
+      priceMap: null,
       stats: {
         odds_screen_skipped: "no_ev_table_games",
       },
@@ -356,7 +423,7 @@ export async function mergeOddsScreenPrices(flat, buildOpts) {
 
   const fetchKeys = collectOddsScreenFetchKeys(flat, allowed);
   if (fetchKeys.size === 0) {
-    return { flat, stats: { odds_screen_skipped: "no_fetch_keys" } };
+    return { flat, priceMap: null, stats: { odds_screen_skipped: "no_fetch_keys" } };
   }
 
   const { map, fetches, bytes } = await buildOddsScreenPriceMap(fetchKeys, allowed);
@@ -364,6 +431,7 @@ export async function mergeOddsScreenPrices(flat, buildOpts) {
 
   return {
     flat: newFlat,
+    priceMap: map,
     stats: {
       odds_screen_fetches: fetches,
       odds_screen_html_bytes: bytes,

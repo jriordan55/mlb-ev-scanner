@@ -50,7 +50,7 @@ function parseAmericanNum(x) {
   return Number.isFinite(n) ? n : NaN;
 }
 
-function toProb(american) {
+export function toProb(american) {
   const a = Number(american);
   if (!Number.isFinite(a)) return NaN;
   return a > 0 ? 100 / (a + 100) : Math.abs(a) / (Math.abs(a) + 100);
@@ -84,7 +84,7 @@ function kellyBetDollars(fairProb, priceAmerican, bankroll, kellyFrac) {
   return bankroll * kEff;
 }
 
-function fmtAmerican(x) {
+export function fmtAmerican(x) {
   if (!Number.isFinite(x)) return "";
   return x > 0 ? `+${Math.round(x)}` : String(Math.round(x));
 }

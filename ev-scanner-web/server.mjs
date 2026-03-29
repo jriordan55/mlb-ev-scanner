@@ -15,7 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchBallparkPalOddsFlat, buildEvTableBpp, fetchParkFactors, attachParkFactors } from "./lib/bpp.mjs";
-import { mergeOddsScreenPrices } from "./lib/odds-screen.mjs";
+import { mergeOddsScreenPrices, applyOddsScreenToEvRows } from "./lib/odds-screen.mjs";
 import { TARGET_BOOKS, BOOK_DISPLAY, BOOK_ABBR_UPPER, MARKET_LABELS } from "./lib/constants.mjs";
 
 const ALLOW_DEVIG_METHOD = new Set([
@@ -121,6 +121,9 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
 
   // Kelly / boost recomputed on the client from fair_prob + best_price.
   let ev = buildEvTableBpp(flat, buildOpts);
+  if (os.priceMap?.size) {
+    ev = applyOddsScreenToEvRows(ev, os.priceMap);
+  }
   stats.ev_table_rows = ev.length;
   console.error("[mlb-ev] ev table rows:", ev.length);
   if (ev.length === 0 && flat.length > 0) {

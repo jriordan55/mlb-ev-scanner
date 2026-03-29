@@ -277,8 +277,7 @@ function fillFilters(data) {
 
   const thead = document.querySelector("#grid thead tr");
   if (thead) {
-    const staticCols = 17;
-    while (thead.children.length > staticCols) {
+    while (thead.lastElementChild?.classList.contains("book-head")) {
       thead.removeChild(thead.lastChild);
     }
     for (const b of data.books || []) {

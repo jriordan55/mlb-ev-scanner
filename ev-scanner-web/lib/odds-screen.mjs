@@ -5,13 +5,11 @@
 import {
   BALLPARK_PAL_ODDS_SCREEN_URL,
   BPP_BETMARKET_MAP,
-  TARGET_BOOKS,
   SKIPPED_BOOK_KEYS,
-  BOOK_ABBR_UPPER,
   BOOK_DISPLAY,
   EXCLUDED_BPP_MARKET_KEYS,
 } from "./constants.mjs";
-import { buildEvTableBpp, dedupeRows, fmtAmerican, calcEvPct, toProb } from "./bpp.mjs";
+import { buildEvTableBpp, dedupeRows, fmtAmerican, calcEvPct, toProb, bookColAbbr } from "./bpp.mjs";
 
 function envInt(name, def) {
   const v = Number.parseInt(process.env[name] ?? "", 10);
@@ -292,7 +290,7 @@ function parseOddsScreenDataRow(rowInner, slotBooks) {
     const bk = canonicalBookKey(slotBooks[j]);
     if (bk === "bpp_skip" || SKIPPED_BOOK_KEYS.has(bk)) continue;
     const pr = amPrices[j];
-    if (TARGET_BOOKS.includes(bk) && Number.isFinite(pr)) prices[bk] = pr;
+    if (Number.isFinite(pr)) prices[bk] = pr;
   }
 
   const pair = [tm, opp].sort();
@@ -445,16 +443,18 @@ export function injectOddsScreenMissingBooks(flat, priceMap, allowedGamesByDate)
   for (const [mk, hit] of priceMap) {
     const tmpl = templateByMk.get(mk);
     if (!tmpl) continue;
-    for (const bk of TARGET_BOOKS) {
+    for (const bk of Object.keys(hit.prices ?? {})) {
       if (SKIPPED_BOOK_KEYS.has(bk)) continue;
       if (!Number.isFinite(hit.prices[bk])) continue;
       const rowKey = `${mk}\t${bk}`;
       if (have.has(rowKey)) continue;
       have.add(rowKey);
+      const lab =
+        BOOK_DISPLAY[bk] ?? (String(bk).startsWith("bpp_") ? bk.slice(4).toUpperCase() : bk);
       added.push({
         ...tmpl,
         bookmaker_key: bk,
-        bookmaker: BOOK_DISPLAY[bk] ?? bk,
+        bookmaker: lab,
         price: hit.prices[bk],
         bp_price: Number.isFinite(hit.bp_price) ? hit.bp_price : tmpl.bp_price,
       });
@@ -463,13 +463,8 @@ export function injectOddsScreenMissingBooks(flat, priceMap, allowedGamesByDate)
   return { flat: added.length ? [...flat, ...added] : flat, injected: added.length };
 }
 
-function bookColAbbr(bk) {
-  const k = canonicalBookKey(bk);
-  return BOOK_ABBR_UPPER[k] ?? String(k).toUpperCase().slice(0, 3);
-}
-
 /**
- * Fill per-row book columns + BP from Odds-Screen map (all six books when present), and refresh best line to max EV among those prices.
+ * Fill per-row book columns + BP from Odds-Screen map (all books when present), and refresh best line to max EV among those prices.
  */
 export function applyOddsScreenToEvRows(evRows, priceMap) {
   if (!priceMap?.size || !evRows?.length) return evRows;
@@ -482,8 +477,7 @@ export function applyOddsScreenToEvRows(evRows, priceMap) {
     const hit = priceMap.get(mk);
     if (!hit) return r;
     const books = { ...r.books };
-    for (const bk of TARGET_BOOKS) {
-      const pr = hit.prices[bk];
+    for (const [bk, pr] of Object.entries(hit.prices ?? {})) {
       if (Number.isFinite(pr)) books[bookColAbbr(bk)] = pr;
     }
     let bp_price = r.bp_price;
@@ -495,7 +489,7 @@ export function applyOddsScreenToEvRows(evRows, priceMap) {
     let bestKey = null;
     let bestPrice = NaN;
     let bestEv = -Infinity;
-    for (const bk of TARGET_BOOKS) {
+    for (const bk of Object.keys(hit.prices ?? {})) {
       const col = bookColAbbr(bk);
       const pr = books[col];
       if (!Number.isFinite(pr)) continue;

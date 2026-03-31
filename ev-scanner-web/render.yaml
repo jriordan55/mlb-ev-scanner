@@ -24,6 +24,9 @@ services:
         value: "2"
       - key: MLB_SCANNER_MIN_BOOKS_SAME_LINE
         value: "1"
+      # Merge Odds-Screen.php prices for every book column Ballpark Pal shows (slower scan).
+      - key: MLB_SCANNER_ODDS_SCREEN
+        value: "1"
 
   - type: web
     name: mlb-ev-scanner-ui

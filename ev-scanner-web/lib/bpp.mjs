@@ -183,12 +183,13 @@ function bppPositiveEvBookAbbrToKey(abbr) {
   };
   if (m[norm] === "__skip__") return null;
   if (m[norm]) return m[norm];
-  if (/^[A-Z]{2,6}$/.test(norm)) return `bpp_${norm.toLowerCase()}`;
+  /** Long codes (e.g. POINTSBET) become bpp_* so rows are not dropped. */
+  if (/^[A-Z]{2,20}$/.test(norm)) return `bpp_${norm.toLowerCase()}`;
   return null;
 }
 
 /** Grid column header: stable abbr per bookmaker_key (avoids collisions for bpp_* keys). */
-function bookColAbbr(bk) {
+export function bookColAbbr(bk) {
   const ck = canonicalBookKey(bk);
   if (BOOK_ABBR_UPPER[ck]) return BOOK_ABBR_UPPER[ck];
   if (ck.startsWith("bpp_")) return ck.slice(4).toUpperCase();

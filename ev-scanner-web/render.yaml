@@ -21,7 +21,7 @@ services:
       - key: MLB_SCANNER_SKIP_PARK_FACTORS
         value: "1"
       - key: MLB_SCANNER_BPP_FETCH_DAYS
-        value: "1"
+        value: "2"
 
   - type: web
     name: mlb-ev-scanner-ui

@@ -589,7 +589,8 @@ export function buildEvTableBpp(rows, opts = {}) {
 
   const keysInData = [...new Set(d.map((r) => r.bookmaker_key).filter(Boolean))].sort();
   const orderedBookKeys = [
-    ...TARGET_BOOKS.filter((k) => keysInData.includes(k) && !SKIPPED_BOOK_KEYS.has(k)),
+    // Keep a stable full column set so sportsbooks do not disappear between scans.
+    ...TARGET_BOOKS.filter((k) => k !== "ballpark_pal" && !SKIPPED_BOOK_KEYS.has(k)),
     ...keysInData.filter((k) => !TARGET_BOOKS.includes(k) && !SKIPPED_BOOK_KEYS.has(k)),
   ];
   const booksForUi = orderedBookKeys.map((k) => ({

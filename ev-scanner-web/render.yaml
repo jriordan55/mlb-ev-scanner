@@ -1,10 +1,16 @@
-# Deploy on https://render.com (free tier) — see comment in server.mjs header.
+# Deploy on https://render.com.
 # In the Render dashboard set Root Directory to: ev-scanner-web
 # (if this folder lives inside a larger Git repo).
+#
+# This blueprint creates:
+# - mlb-ev-scanner-api  (Node API / scraper)
+# - mlb-ev-scanner-ui   (Static Site)
+# The UI points to API_ORIGIN for /api/* calls, so users do not see
+# the Render "service waking up" page on first UI load.
 
 services:
   - type: web
-    name: mlb-ev-scanner
+    name: mlb-ev-scanner-api
     runtime: node
     plan: free
     buildCommand: "echo no-build"
@@ -16,3 +22,16 @@ services:
         value: "1"
       - key: MLB_SCANNER_BPP_FETCH_DAYS
         value: "1"
+
+  - type: web
+    name: mlb-ev-scanner-ui
+    runtime: static
+    buildCommand: npm install && npm run build:static
+    staticPublishPath: dist
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Set this to your API service URL (for example: https://mlb-ev-scanner-api.onrender.com)
+      - key: API_ORIGIN
+        value: "https://mlb-ev-scanner-api.onrender.com"

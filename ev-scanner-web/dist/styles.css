@@ -187,26 +187,42 @@ body {
   content: "▼";
 }
 
-/* Keep sizing for key columns, but do not freeze any columns. */
+/* Frozen left columns (EV → Player); horizontal scroll for book grid */
+.ev-grid th.col-pin,
+.ev-grid td.col-pin {
+  position: sticky;
+  z-index: 3;
+  background: #111b2b;
+  box-shadow: 4px 0 8px -6px rgba(0, 0, 0, 0.65);
+}
+
+.ev-grid thead th.col-pin {
+  z-index: 5;
+  background: #1c2533;
+}
 
 .ev-grid th.col-pin-1,
 .ev-grid td.col-pin-1 {
+  left: 0;
   min-width: 52px;
 }
 
 .ev-grid th.col-pin-2,
 .ev-grid td.col-pin-2 {
+  left: 52px;
   min-width: 56px;
 }
 
 .ev-grid th.col-pin-3,
 .ev-grid td.col-pin-3 {
+  left: 108px;
   min-width: 100px;
   max-width: 120px;
 }
 
 .ev-grid th.col-pin-4,
 .ev-grid td.col-pin-4 {
+  left: 208px;
   min-width: 120px;
   max-width: 160px;
 }

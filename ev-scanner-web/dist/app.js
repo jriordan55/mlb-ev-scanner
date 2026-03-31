@@ -585,7 +585,17 @@ async function load(opts = {}) {
     lastData = data;
     fillFilters(data);
     redraw();
-    status.textContent = new Date(data.fetchedAt).toLocaleString();
+    const st = data.stats || {};
+    let line = new Date(data.fetchedAt).toLocaleString();
+    if (Array.isArray(st.warnings) && st.warnings.length) line += ` · ⚠ ${st.warnings.join(" ")}`;
+    status.textContent = line;
+    if (data.rows.length === 0 && (st.flat_odds_rows ?? 0) === 0) {
+      const origin = apiOrigin() || "";
+      const base = origin || window.location.origin || "";
+      status.textContent += ` — No odds (timeout/block/off-season?). Try ${base}/api/health`;
+    } else if (data.rows.length === 0 && (st.flat_odds_rows ?? 0) > 0) {
+      status.textContent += " — EV table empty (try MLB_SCANNER_MIN_BOOKS_SAME_LINE=1 on server).";
+    }
   } catch (e) {
     if (seq !== loadSeq) return;
     if (e?.name === "AbortError") {
@@ -725,7 +735,14 @@ function render(rows, bankroll, books) {
     document.getElementById("boostCustomPct")?.value,
   );
   if (!rows?.length) {
-    tb.innerHTML = "";
+    const st = lastData?.stats;
+    const hint =
+      st && (st.flat_odds_rows ?? 0) > 0 && (st.ev_table_rows ?? 0) === 0
+        ? "Odds loaded but the EV table is empty (unusual). Try lowering MLB_SCANNER_MIN_BOOKS_SAME_LINE to 1 on the server."
+        : st && (st.flat_odds_rows ?? 0) === 0
+          ? "No odds rows from Ballpark Pal (timeout, block, or off-season)."
+          : "No rows match your filters — set Market / Game / Best book to All.";
+    tb.innerHTML = `<tr><td colspan="99" style="padding:24px;color:#6b7c99">${esc(hint)}</td></tr>`;
     return;
   }
   const keyToAbbr = Object.fromEntries(books.map((b) => [b.key, b.abbr]));

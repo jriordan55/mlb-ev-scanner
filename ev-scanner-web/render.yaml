@@ -22,6 +22,8 @@ services:
         value: "1"
       - key: MLB_SCANNER_BPP_FETCH_DAYS
         value: "2"
+      - key: MLB_SCANNER_MIN_BOOKS_SAME_LINE
+        value: "1"
 
   - type: web
     name: mlb-ev-scanner-ui

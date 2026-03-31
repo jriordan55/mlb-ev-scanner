@@ -551,7 +551,7 @@ function lineKey(ln) {
  * @param {any[]} rows
  */
 export function buildEvTableBpp(rows, opts = {}) {
-  const minBooks = envInt("MLB_SCANNER_MIN_BOOKS_SAME_LINE", envInt("MLB_SHINY_MIN_BOOKS_SAME_LINE", 2));
+  const minBooks = envInt("MLB_SCANNER_MIN_BOOKS_SAME_LINE", envInt("MLB_SHINY_MIN_BOOKS_SAME_LINE", 1));
   const bankroll = opts.bankroll ?? 1000;
   const kellyFrac = envNum("MLB_SCANNER_KELLY_FRACTION", envNum("MLB_SHINY_KELLY_FRACTION", 0.25));
   const devigMethod = String(opts.devigMethod ?? "multiplicative");

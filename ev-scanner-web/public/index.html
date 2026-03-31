@@ -76,7 +76,7 @@
           <th class="sortable" data-sort="fair" title="Click to sort">Fair</th>
           <th class="sortable" data-sort="cs" title="Click to sort">CS*</th>
           <th class="sortable" data-sort="implied" title="Click to sort">Implied</th>
-          <th class="sortable" data-sort="delta" title="The probability delta between the outlier book and the market consensus (with vig).">Δ</th>
+          <th class="sortable" data-sort="delta" title="From Ballpark Pal Positive EV: probability delta vs consensus (with vig) for that row.">Δ</th>
           <th class="sortable" data-sort="market" title="Click to sort">Prop</th>
           <th class="sortable" data-sort="side" title="Click to sort">O/U</th>
           <th class="sortable" data-sort="matchup" title="Click to sort">Matchup</th>
@@ -208,16 +208,15 @@
           <li><strong>Fair:</strong> Fair American odds after devig; excludes promotions.</li>
           <li><strong>Consensus:</strong> Average odds of the market. Shown in the table as CS*.</li>
           <li><strong>Implied:</strong> Win probability implied by the price used for that row, after boost if applicable.</li>
-          <li><strong>Δ:</strong> The probability delta between the outlier book and the market consensus (with vig), when present on the Ballpark Pal table.</li>
+          <li><strong>Δ:</strong> The probability delta between the posted line and the market consensus (with vig), as shown on the Ballpark Pal Positive EV page for that row.</li>
           <li><strong>Matchup and park columns:</strong> Teams and Ballpark Pal combined effect park factors.</li>
-          <li>Additional columns list each book’s price for side by side comparison.</li>
         </ul>
       </div>
       <button value="ok" class="top-btn">Close</button>
     </form>
   </dialog>
 
-  <script src="/app.js?v=20260344" type="module"></script>
+  <script src="/app.js?v=20260345" type="module"></script>
   <script>
     setTimeout(function () {
       var s = document.getElementById("status");

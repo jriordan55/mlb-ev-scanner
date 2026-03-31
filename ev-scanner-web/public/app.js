@@ -94,7 +94,6 @@ const LS_DEVIG_BOOKS = "ev_devig_books";
 const LS_DEVIG_SOURCE = "ev_devig_source";
 const LS_DEVIG_METHOD = "ev_devig_method";
 
-const BP_FAV_DOMAIN = "ballparkpal.com";
 const MLB_LOGO_ABBR = { ATH: "oak", WSH: "wsh", SFG: "sf", TBR: "tb", KCR: "kc" };
 
 function mlbLogoUrl(abbr) {
@@ -481,15 +480,7 @@ function sortExtract(r, sortKey, ctx) {
       return bppSortVal(r.bpp_1b);
     case "bpp_runs":
       return bppSortVal(r.bpp_runs);
-    case "bp_model":
-      return sortKindNum(r.bp_price == null ? NaN : Number(r.bp_price));
     default:
-      if (sortKey.startsWith("book:")) {
-        const bk = sortKey.slice(5);
-        const abbr = ctx.bookKeyToAbbr?.[bk];
-        const raw = abbr != null ? r.books?.[abbr] : NaN;
-        return sortKindNum(Number(raw));
-      }
       return sortKindStr("");
   }
 }
@@ -681,30 +672,6 @@ function fillFilters(data) {
     if ([...bb.options].some((o) => o.value === curB)) bb.value = curB;
   }
 
-  const thead = document.querySelector("#grid thead tr");
-  if (thead) {
-    while (thead.lastElementChild?.classList.contains("book-head")) {
-      thead.removeChild(thead.lastChild);
-    }
-    const bpTh = document.createElement("th");
-    bpTh.className = "book-head bp-head sortable";
-    bpTh.dataset.sort = "bp_model";
-    bpTh.title = "Ballpark Pal model — used in fair / devig; not bettable";
-    bpTh.innerHTML = `<span class="bh bh-logo-only"><img src="${esc(favUrl(BP_FAV_DOMAIN))}" alt="" width="20" height="20"/></span>`;
-    thead.appendChild(bpTh);
-    for (const b of data.books || []) {
-      const th = document.createElement("th");
-      th.className = "book-head sortable";
-      th.dataset.sort = `book:${b.key}`;
-      th.title = b.label ?? b.abbr;
-      const dom = FAVICON[b.key];
-      const img = dom
-        ? `<img src="${esc(favUrl(dom))}" alt="" width="22" height="22" loading="lazy"/>`
-        : `<span class="bh-fallback">${esc(b.abbr)}</span>`;
-      th.innerHTML = `<span class="bh bh-logo-only">${img}</span>`;
-      thead.appendChild(th);
-    }
-  }
 }
 
 function matchupCell(game) {
@@ -718,7 +685,7 @@ function matchupCell(game) {
   return `<td class="td-matchup"><span class="matchup-logos"><img src="${ua}" alt="" width="22" height="22" loading="lazy" decoding="async"/><span class="at">@</span><img src="${ub}" alt="" width="22" height="22" loading="lazy" decoding="async"/></span></td>`;
 }
 
-function render(rows, bankroll, books) {
+function render(rows, bankroll) {
   const tb = document.getElementById("tbody");
   const boostPct = resolveBoostProfitPct(
     document.getElementById("boostMode")?.value,
@@ -728,7 +695,6 @@ function render(rows, bankroll, books) {
     tb.innerHTML = "";
     return;
   }
-  const keyToAbbr = Object.fromEntries(books.map((b) => [b.key, b.abbr]));
   const frag = document.createDocumentFragment();
   for (const r of rows) {
     const tr = document.createElement("tr");
@@ -743,7 +709,6 @@ function render(rows, bankroll, books) {
     }
     const kellyRaw = formatKelly(r.fair_prob, effBest, bankroll);
     const kelly = cellDashBlank(kellyRaw);
-    const bestAbbr = keyToAbbr[r.best_book_key] || "";
     const dom = FAVICON[r.best_book_key] || "";
 
     const tp = toProbAmerican(effBest);
@@ -759,11 +724,6 @@ function render(rows, bankroll, books) {
       oddsPart || bestImg
         ? `<div class="td-best-inner">${oddsPart}${bestImg ? `<span class="best-logo-wrap">${bestImg}</span>` : ""}</div>`
         : "";
-    const bpStr =
-      r.bp_price != null && Number.isFinite(Number(r.bp_price))
-        ? cellAmerican(r.bp_price)
-        : cellDashBlank(r.bp_fmt);
-
     const dVig =
       r.delta_vig_fmt != null && r.delta_vig_fmt !== "—"
         ? esc(r.delta_vig_fmt)
@@ -801,15 +761,7 @@ function render(rows, bankroll, books) {
         return x ? esc(x) : "";
       })()}</td>`,
     ];
-    const bpTd = `<td>${bpStr ? `<span class="bp-col">${esc(bpStr)}</span>` : ""}</td>`;
-    const bookCells = [];
-    for (const b of books) {
-      const raw = r.books?.[b.abbr];
-      let inner = raw != null && Number.isFinite(raw) ? cellAmerican(raw) : "";
-      if (b.abbr === bestAbbr && inner) inner = `<span class="best-cell">${esc(inner)}</span>`;
-      bookCells.push(`<td>${inner}</td>`);
-    }
-    tr.innerHTML = [...staticCells, bpTd, ...bookCells].join("");
+    tr.innerHTML = staticCells.join("");
     frag.appendChild(tr);
   }
   tb.innerHTML = "";

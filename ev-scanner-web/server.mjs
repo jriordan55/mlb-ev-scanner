@@ -245,6 +245,9 @@ async function runScan(skipPf, bypassCache, scanOpts = {}) {
     ev = ev.map((r) => ({ ...r, bpp_hr: "—", bpp_2b3b: "—", bpp_1b: "—", bpp_runs: "—" }));
   }
 
+  /** UI no longer shows per-book price columns; keep payload small and ignore Odds-Screen cell fills here. */
+  ev = ev.map((r) => ({ ...r, books: {} }));
+
   const games = [...new Set(ev.map((r) => r.game))].sort();
   const markets = [...new Set(ev.map((r) => r.market))].sort();
 
